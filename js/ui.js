@@ -24,7 +24,7 @@ const hTxt = x => nh(x) + ' h';
 
 let S = L.newState(), view = 'config', scope = 'general', expanded = new Set(), undo = null, month = TODAY.slice(0, 7);
 let draft = {text: '', res: null, diffs: null}, confirmDel = false, props = null, parar = false, showExtra = false, planAdd = false, formErr = '';
-let pick = null, pickMonth = null, menuOpen = null, slotEdit = null;
+let pick = null, pickMonth = null, menuOpen = null, slotEdit = null, dayPop = null;
 let ma = {sid: '', nom: '', min: 30, pri: 1}, ex = {sid: '', nom: ''};
 let store = {kind: 'local'};
 
@@ -171,18 +171,30 @@ function daysBlock() {
   const sum = days.filter(x => x.d >= TODAY && !S.app.closed[x.d]).reduce((a, x) => a + (+x.h || 0), 0);
   const list = days.length ? days.map(x => {
     const past = x.d < TODAY, has = x.slots && x.slots.length;
-    const right = has || past ? `<span class="num dl-h">${fmt(x.h * 60)}</span>` : stepper({key: 'dayh', id: x.d, value: x.h, step: .25, min: 0, max: 16, fmt: hTxt, label: 'Horas del ' + dayLabel(x.d), size: 'sm'});
-    return `<div class="dl ${past ? 'off' : ''}"><div class="w"><span>${dayLabel(x.d)}</span>${past ? '<small>Ya pasado</small>' : has ? '' : '<small>Sin franjas: horas a mano</small>'}</div>
-      ${slotsTrack({sk: 'day:' + x.d, slots: x.slots || [], app: S.app, edit: slotEdit, label: 'Franjas del ' + dayLabel(x.d), readonly: past})}
-      ${right}<button class="icon round" data-rm="${x.d}" aria-label="Quitar ${dayLabel(x.d)}">×</button></div>`;
+    const sum = has ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : 'Sin franjas: horas a mano';
+    return `<div class="dl ${past ? 'off' : ''} ${dayPop === x.d ? 'open' : ''}" data-dayopen="${x.d}" tabindex="0" title="Doble clic para editar las franjas de este día"><div class="w"><span>${dayLabel(x.d)}</span><small>${past ? 'Ya pasado' : esc(sum)}</small></div>
+      <span class="num dl-h">${fmt(x.h * 60)}</span><button class="icon round" data-rm="${x.d}" aria-label="Quitar ${dayLabel(x.d)}">×</button></div>`;
   }).join('') + `<div class="dl total"><div class="w"><span>Total que cuenta</span></div><span class="num">${fmt(sum * 60)}</span></div>` : '<div class="dl"><div class="w"><span>Sin días todavía. Toca días en el calendario.</span></div></div>';
-  return `<section class="card"><h2>Tus días</h2><p class="sub">Pulsa un día del calendario para añadirlo o quitarlo. En la lista ajustas sus franjas como en el horario. El borde rojo marca una fecha límite.</p>
+  return `<section class="card"><h2>Tus días</h2><p class="sub">Pulsa un día del calendario para añadirlo o quitarlo. Doble clic sobre un día de la lista para ajustar sus franjas. El borde rojo marca una fecha límite.</p>
    <div class="fields">
     <div class="field"><span class="lbl">Horas si el día no tiene horario</span>${stepper({key: 'defH', value: S.app.defH, step: .25, min: .25, max: 16, fmt: hTxt, label: 'Horas si el día no tiene horario'})}</div>
     <div class="field"><span class="lbl">Máximo de horas al día</span>${stepper({key: 'maxH', value: S.app.maxH, step: .5, min: 1, max: 16, fmt: hTxt, label: 'Máximo de horas al día'})}</div>
     <div class="field"><span class="lbl">Fecha cercana: días antes</span>${chips({key: 'standby', value: S.app.standby ?? 30, label: 'Días de fecha cercana', options: [7, 14, 30, 60, 90].map(v => ({v, label: v + ' días'}))})}</div></div>
    <div class="days-grid"><div class="cal"><div class="cal-head"><button class="icon round" data-month="-1" aria-label="Mes anterior">‹</button><strong>${nm[0].toUpperCase() + nm.slice(1)}</strong><button class="icon round" data-month="1" aria-label="Mes siguiente">›</button></div><div class="cal-grid">${cells}</div></div>
-   <div class="daylist">${list}</div></div></section>`;
+   <div class="daylist">${list}</div></div></section>${dayModal()}`;
+}
+function dayModal() {
+  const x = dayPop && S.app.days.find(y => y.d === dayPop);
+  if (!x) {dayPop = null; return ''}
+  const past = x.d < TODAY, has = x.slots && x.slots.length, sch = L.schedSlots(S.app, L.weekIdx(x.d));
+  const hours = has || past ? `<span class="num dl-h big">${fmt(x.h * 60)}</span>` : stepper({key: 'dayh', id: x.d, value: x.h, step: .25, min: 0, max: 16, fmt: hTxt, label: 'Horas del ' + dayLabel(x.d)});
+  return `<div class="modal-bg" data-modalbg="1"><div class="modal" role="dialog" aria-modal="true" aria-label="Franjas del ${dayLabel(x.d, {weekday: 'long', month: 'long'})}">
+    <div class="modal-h"><h3>${dayLabel(x.d, {weekday: 'long', month: 'long'})}</h3><button class="icon round" data-dayclose="1" aria-label="Cerrar">×</button></div>
+    <p class="sub">${past ? 'Día pasado: solo se puede consultar.' : 'Doble clic en un hueco para añadir una franja. Arrástrala, estírala por los bordes o haz doble clic sobre ella para escribir sus horas o borrarla.'}</p>
+    <div class="modal-trk">${axis()}${slotsTrack({sk: 'day:' + x.d, slots: x.slots || [], app: S.app, edit: slotEdit, label: 'Franjas del ' + dayLabel(x.d), readonly: past})}</div>
+    <div class="modal-f"><div class="field"><span class="lbl">${has ? 'Horas de estudio' : 'Horas de estudio (sin franjas)'}</span>${hours}</div>
+    <div class="row-btns">${!past && sch.length ? `<button class="btn ghost sm" data-dayreset="${x.d}">Usar mi horario de los ${DAYS[L.weekIdx(x.d)].toLowerCase()}</button>` : ''}<button class="btn sm" data-dayclose="1">Listo</button></div></div>
+  </div></div>`;
 }
 function propsBlock(ob) {
   if (!ob.need) return '';
@@ -469,6 +481,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter') {e.preventDefault(); applySlotEdit()}
     else if (e.key === 'Escape') {e.preventDefault(); slotEdit = null; render()}
   } else if (e.key === 'Escape' && (pick || menuOpen || slotEdit)) {pick = null; menuOpen = null; slotEdit = null; render()}
+  else if (e.key === 'Escape' && dayPop) {dayPop = null; render()}
+  else if (e.key === 'Enter' && e.target.dataset && e.target.dataset.dayopen) {e.preventDefault(); dayPop = e.target.dataset.dayopen; slotEdit = null; render()}
 });
 document.addEventListener('change', e => {
   const el = e.target, d = el.dataset, num = parseFloat(el.value);
@@ -482,6 +496,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('click', e => {
   if ((pick && !e.target.closest('.dp')) || (menuOpen && !e.target.closest('.mn'))) {pick = null; menuOpen = null; render(); if (!e.target.closest('button')) return}
+  if (dayPop && e.target.dataset && e.target.dataset.modalbg) {dayPop = null; slotEdit = null; render(); return}
   if (slotEdit && !e.target.closest('.slot-pop') && !e.target.closest('.slot')) {slotEdit = null; render(); return}
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.set !== undefined) {applySet(d.set, d.id, d.val, b); return}
@@ -492,6 +507,8 @@ document.addEventListener('click', e => {
   if (d.slot === 'apply') {applySlotEdit(); return}
   if (d.slot === 'cancel') {slotEdit = null; render(); return}
   if (d.slot === 'del') {const sl = getSlots(slotEdit.sk).filter((_, k) => k !== slotEdit.j); setSlots(slotEdit.sk, sl); return}
+  if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
+  if (d.dayreset) {const i = S.app.days.findIndex(y => y.d === d.dayreset); if (i >= 0) S.app.days[i] = makeDay(S.app, d.dayreset); slotEdit = null; touch(); return}
   if (d.login) {store.login && store.login(); return}
   if (d.logout) {store.logout && store.logout(); return}
   if (d.view) {view = d.view; render()}
@@ -543,7 +560,7 @@ document.addEventListener('click', e => {
     commit();
   }
   else if (d.cal) {const i = S.app.days.findIndex(x => x.d === d.cal); if (i >= 0) S.app.days.splice(i, 1); else S.app.days.push(makeDay(S.app, d.cal)); touch()}
-  else if (d.rm) {S.app.days = S.app.days.filter(x => x.d !== d.rm); touch()}
+  else if (d.rm) {S.app.days = S.app.days.filter(x => x.d !== d.rm); if (dayPop === d.rm) dayPop = null; touch()}
   else if (d.month) {const [y, m] = month.split('-').map(Number); month = new Date(Date.UTC(y, m - 1 + +d.month, 1)).toISOString().slice(0, 7); render()}
   else if (d.exp) {const k = scope + d.exp; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); render()}
   else if (d.subup) {const o = [...S.app.order], i = o.indexOf(d.subup), j = i + +d.d; if (j >= 0 && j < o.length) {[o[i], o[j]] = [o[j], o[i]]; S.app.order = o; touch()}}
@@ -552,6 +569,15 @@ document.addEventListener('click', e => {
   else if (d.undo && undo) {S.app.days = undo; undo = null; touch()}
 });
 bindSlots({get: getSlots, set: setSlots, edit: openSlotEdit});
+/* Doble clic o doble toque sobre un día de «Tus días» abre sus franjas en una ventana. */
+let rowTap = null;
+document.addEventListener('pointerdown', e => {
+  const row = e.target.closest('[data-dayopen]');
+  if (!row || e.target.closest('button')) return;
+  const now = Date.now(), d = row.dataset.dayopen;
+  if (rowTap && rowTap.d === d && now - rowTap.t < 350) {rowTap = null; e.preventDefault(); dayPop = d; slotEdit = null; render(); return}
+  rowTap = {d, t: now};
+});
 setInterval(tick, 500);
 document.addEventListener('visibilitychange', () => {if (!document.hidden) {tick(); wake()}});
 
