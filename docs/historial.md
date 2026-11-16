@@ -21,7 +21,8 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 - App instalable (PWA) en Windows y en el iPhone, con service worker para funcionar sin conexión.
 - Guardado preparado para Firebase (Firestore y Google) para sincronizar dispositivos. Sin configurar, guarda en el navegador.
 - Estética redondeada y controles propios en lugar de desplegables, campos numéricos y selectores de hora nativos: botones − y +, barras de opciones, fichas, bloques, interruptores, un calendario y un desplegable.
-- Horario con varias franjas por día: se añaden con doble clic, se arrastran y se estiran por los bordes, y sus horas de estudio se escriben en hh:mm. Los días del calendario también tienen franjas.
+- Horario con varias franjas por día: se añaden con doble clic, se arrastran y se estiran por los bordes, y sus horas de estudio se escriben en hh:mm. Los días del calendario también tienen franjas, que se editan en una ventana con doble clic.
+- «Tus días» sin lista: calendario grande con ficha de cada día al dejar el cursor encima o mantenerlo pulsado.
 - Migración automática de los datos de la v1 (una sola franja por día).
 
 ## Puntos débiles conocidos

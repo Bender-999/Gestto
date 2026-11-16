@@ -30,5 +30,5 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Controles | Nada de desplegables, campos numéricos ni selectores de hora nativos. Se usan botones − y +, fichas, bloques, interruptores, un calendario y un desplegable propios |
 | Horario | Varias franjas por día. Doble clic en un hueco añade una franja, arrastrar la mueve y los bordes la alargan. Doble clic sobre una franja abre sus horas de estudio en hh:mm, donde también se borra. Sin botones de inicio y fin |
 | Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
-| Tus días | La lista muestra cada día en una línea (fecha, franjas en texto y horas). Las franjas se editan en una ventana que se abre con doble clic sobre el día |
+| Tus días | Sin lista de días: solo el calendario. Un clic añade o quita el día, dejar el cursor encima (o mantener pulsado en el móvil) muestra su ficha (horas, franjas, plan por asignatura y fechas límite) y doble clic abre una ventana para editar sus franjas |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |

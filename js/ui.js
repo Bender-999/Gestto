@@ -168,20 +168,31 @@ function daysBlock() {
     const d = month + '-' + pad(i), e = days.find(x => x.d === d), past = d < TODAY;
     cells += `<button class="cd ${e ? 'on' : ''} ${past && !e ? 'past' : ''} ${d === TODAY ? 'today' : ''} ${lims.includes(d) ? 'lim' : ''}" data-cal="${d}" ${past && !e ? 'disabled' : ''} aria-pressed="${!!e}" aria-label="${dayLabel(d)}${e ? ', ' + e.h + ' horas' : ''}">${i}<small>${e ? nh(e.h) : ''}</small></button>`;
   }
-  const sum = days.filter(x => x.d >= TODAY && !S.app.closed[x.d]).reduce((a, x) => a + (+x.h || 0), 0);
-  const list = days.length ? days.map(x => {
-    const past = x.d < TODAY, has = x.slots && x.slots.length;
-    const sum = has ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : 'Sin franjas: horas a mano';
-    return `<div class="dl ${past ? 'off' : ''} ${dayPop === x.d ? 'open' : ''}" data-dayopen="${x.d}" tabindex="0" title="Doble clic para editar las franjas de este día"><div class="w"><span>${dayLabel(x.d)}</span><small>${past ? 'Ya pasado' : esc(sum)}</small></div>
-      <span class="num dl-h">${fmt(x.h * 60)}</span><button class="icon round" data-rm="${x.d}" aria-label="Quitar ${dayLabel(x.d)}">×</button></div>`;
-  }).join('') + `<div class="dl total"><div class="w"><span>Total que cuenta</span></div><span class="num">${fmt(sum * 60)}</span></div>` : '<div class="dl"><div class="w"><span>Sin días todavía. Toca días en el calendario.</span></div></div>';
-  return `<section class="card"><h2>Tus días</h2><p class="sub">Pulsa un día del calendario para añadirlo o quitarlo. Doble clic sobre un día de la lista para ajustar sus franjas. El borde rojo marca una fecha límite.</p>
+  const fut = days.filter(x => x.d >= TODAY && !S.app.closed[x.d]), sum = fut.reduce((a, x) => a + (+x.h || 0), 0);
+  return `<section class="card"><h2>Tus días</h2><p class="sub">Pulsa un día para añadirlo o quitarlo. Deja el cursor encima de un día (o mantenlo pulsado en el móvil) para ver su información, y haz doble clic para editar sus franjas. El borde rojo marca una fecha límite.</p>
    <div class="fields">
     <div class="field"><span class="lbl">Horas si el día no tiene horario</span>${stepper({key: 'defH', value: S.app.defH, step: .25, min: .25, max: 16, fmt: hTxt, label: 'Horas si el día no tiene horario'})}</div>
     <div class="field"><span class="lbl">Máximo de horas al día</span>${stepper({key: 'maxH', value: S.app.maxH, step: .5, min: 1, max: 16, fmt: hTxt, label: 'Máximo de horas al día'})}</div>
     <div class="field"><span class="lbl">Fecha cercana: días antes</span>${chips({key: 'standby', value: S.app.standby ?? 30, label: 'Días de fecha cercana', options: [7, 14, 30, 60, 90].map(v => ({v, label: v + ' días'}))})}</div></div>
-   <div class="days-grid"><div class="cal"><div class="cal-head"><button class="icon round" data-month="-1" aria-label="Mes anterior">‹</button><strong>${nm[0].toUpperCase() + nm.slice(1)}</strong><button class="icon round" data-month="1" aria-label="Mes siguiente">›</button></div><div class="cal-grid">${cells}</div></div>
-   <div class="daylist">${list}</div></div></section>${dayModal()}`;
+   <div class="cal big"><div class="cal-head"><button class="icon round" data-month="-1" aria-label="Mes anterior">‹</button><strong>${nm[0].toUpperCase() + nm.slice(1)}</strong><button class="icon round" data-month="1" aria-label="Mes siguiente">›</button></div><div class="cal-grid">${cells}</div>
+   <div class="cal-sum"><span>${fut.length ? fut.length + (fut.length === 1 ? ' día por delante' : ' días por delante') : 'Sin días por delante. Toca días en el calendario.'}</span>${fut.length ? `<b class="num">${fmt(sum * 60)}</b>` : ''}</div></div></section>${dayModal()}`;
+}
+const plural = n => n.endsWith('s') ? n : n + 's';
+/* Ficha de un día al dejar el cursor encima (o mantener pulsado en el móvil). */
+function dayTipHTML(d) {
+  const x = S.app.days.find(y => y.d === d), past = d < TODAY, wi = L.weekIdx(d), sch = L.schedSlots(S.app, wi);
+  const lims = S.app.order.filter(i => S.subs[i].limite === d).map(i => S.subs[i].nombre);
+  let body = '';
+  if (!x) body = `<p>${past ? 'Día pasado sin estudio.' : 'Libre. Pulsa para añadirlo.'}</p>` + (!past && sch.length ? `<p class="mut">Tu horario de los ${plural(DAYS[wi].toLowerCase())}: ${sch.map(y => y.ini + '–' + y.fin).join(' · ')}</p>` : '');
+  else {
+    const al = allocate(S, TODAY), by = {};
+    (al.plan[d] || []).forEach(r => {by[r.it.sid] = (by[r.it.sid] || 0) + r.m});
+    const plan = Object.keys(by).map(id => `<li>${sw(id)}${esc(S.subs[id] ? S.subs[id].nombre : id)}<b class="num">${fmt(by[id])}</b></li>`).join('');
+    body = `<div class="tip-big"><b>${fmt(x.h * 60)}</b><span>de estudio${S.app.closed[d] ? ' · terminado' : ''}</span></div>
+      <p>${x.slots && x.slots.length ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : 'Sin franjas: horas a mano'}</p>
+      ${plan ? `<ul>${plan}</ul>` : `<p class="mut">${past ? 'Sin tareas registradas.' : 'Aún no hay tareas para este día.'}</p>`}`;
+  }
+  return `<h4>${dayLabel(d, {weekday: 'long', month: 'long'})}</h4>${body}${lims.length ? `<p class="neg">Fecha límite: ${lims.map(esc).join(', ')}</p>` : ''}${x || !past ? `<small>${x ? 'Doble clic para editar sus franjas' : 'Doble clic para añadirlo y editarlo'}</small>` : ''}`;
 }
 function dayModal() {
   const x = dayPop && S.app.days.find(y => y.d === dayPop);
@@ -193,7 +204,7 @@ function dayModal() {
     <p class="sub">${past ? 'Día pasado: solo se puede consultar.' : 'Doble clic en un hueco para añadir una franja. Arrástrala, estírala por los bordes o haz doble clic sobre ella para escribir sus horas o borrarla.'}</p>
     <div class="modal-trk">${axis()}${slotsTrack({sk: 'day:' + x.d, slots: x.slots || [], app: S.app, edit: slotEdit, label: 'Franjas del ' + dayLabel(x.d), readonly: past})}</div>
     <div class="modal-f"><div class="field"><span class="lbl">${has ? 'Horas de estudio' : 'Horas de estudio (sin franjas)'}</span>${hours}</div>
-    <div class="row-btns">${!past && sch.length ? `<button class="btn ghost sm" data-dayreset="${x.d}">Usar mi horario de los ${DAYS[L.weekIdx(x.d)].toLowerCase()}</button>` : ''}<button class="btn sm" data-dayclose="1">Listo</button></div></div>
+    <div class="row-btns"><button class="btn danger sm" data-rm="${x.d}">Quitar este día</button>${!past && sch.length ? `<button class="btn ghost sm" data-dayreset="${x.d}">Usar mi horario de los ${plural(DAYS[L.weekIdx(x.d)].toLowerCase())}</button>` : ''}<button class="btn sm" data-dayclose="1">Listo</button></div></div>
   </div></div>`;
 }
 function propsBlock(ob) {
@@ -482,7 +493,6 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Escape') {e.preventDefault(); slotEdit = null; render()}
   } else if (e.key === 'Escape' && (pick || menuOpen || slotEdit)) {pick = null; menuOpen = null; slotEdit = null; render()}
   else if (e.key === 'Escape' && dayPop) {dayPop = null; render()}
-  else if (e.key === 'Enter' && e.target.dataset && e.target.dataset.dayopen) {e.preventDefault(); dayPop = e.target.dataset.dayopen; slotEdit = null; render()}
 });
 document.addEventListener('change', e => {
   const el = e.target, d = el.dataset, num = parseFloat(el.value);
@@ -559,8 +569,19 @@ document.addEventListener('click', e => {
     else if (d.act === 'minus5') L.trimRun(S, 5, now);
     commit();
   }
-  else if (d.cal) {const i = S.app.days.findIndex(x => x.d === d.cal); if (i >= 0) S.app.days.splice(i, 1); else S.app.days.push(makeDay(S.app, d.cal)); touch()}
-  else if (d.rm) {S.app.days = S.app.days.filter(x => x.d !== d.rm); if (dayPop === d.rm) dayPop = null; touch()}
+  else if (d.cal) {
+    hideTip();
+    if (tipSuppress) {tipSuppress = false; return}
+    const day = d.cal;
+    if (calLast === day && calTimer) {
+      clearTimeout(calTimer); calTimer = null; calLast = null;
+      if (!S.app.days.some(x => x.d === day)) S.app.days.push(makeDay(S.app, day));
+      dayPop = day; slotEdit = null; touch(); return;
+    }
+    clearTimeout(calTimer); calLast = day;
+    calTimer = setTimeout(() => {calTimer = null; calLast = null; const i = S.app.days.findIndex(x => x.d === day); if (i >= 0) S.app.days.splice(i, 1); else S.app.days.push(makeDay(S.app, day)); touch()}, 260);
+  }
+  else if (d.rm) {S.app.days = S.app.days.filter(x => x.d !== d.rm); if (dayPop === d.rm) {dayPop = null; slotEdit = null} touch()}
   else if (d.month) {const [y, m] = month.split('-').map(Number); month = new Date(Date.UTC(y, m - 1 + +d.month, 1)).toISOString().slice(0, 7); render()}
   else if (d.exp) {const k = scope + d.exp; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); render()}
   else if (d.subup) {const o = [...S.app.order], i = o.indexOf(d.subup), j = i + +d.d; if (j >= 0 && j < o.length) {[o[i], o[j]] = [o[j], o[i]]; S.app.order = o; touch()}}
@@ -569,15 +590,41 @@ document.addEventListener('click', e => {
   else if (d.undo && undo) {S.app.days = undo; undo = null; touch()}
 });
 bindSlots({get: getSlots, set: setSlots, edit: openSlotEdit});
-/* Doble clic o doble toque sobre un día de «Tus días» abre sus franjas en una ventana. */
-let rowTap = null;
-document.addEventListener('pointerdown', e => {
-  const row = e.target.closest('[data-dayopen]');
-  if (!row || e.target.closest('button')) return;
-  const now = Date.now(), d = row.dataset.dayopen;
-  if (rowTap && rowTap.d === d && now - rowTap.t < 350) {rowTap = null; e.preventDefault(); dayPop = d; slotEdit = null; render(); return}
-  rowTap = {d, t: now};
+/* Calendario de «Tus días»: un clic añade o quita el día (con una breve espera por si llega
+   el segundo clic), doble clic abre sus franjas y dejar el cursor encima muestra su ficha. */
+let calTimer = null, calLast = null, tipTimer = null, tipSuppress = false;
+const tip = document.createElement('div');
+tip.className = 'daytip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+document.body.appendChild(tip);
+function showTip(cell) {
+  if (!cell.isConnected) return;
+  tip.innerHTML = dayTipHTML(cell.dataset.cal); tip.dataset.for = cell.dataset.cal; tip.hidden = false;
+  const r = cell.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  const x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+  let y = r.bottom + 8; if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() {clearTimeout(tipTimer); tip.hidden = true; tip.dataset.for = ''}
+document.addEventListener('pointerover', e => {
+  if (e.pointerType !== 'mouse') return;
+  const c = e.target.closest('.cd[data-cal]');
+  if (!c || (!tip.hidden && tip.dataset.for === c.dataset.cal)) return;
+  clearTimeout(tipTimer); tipTimer = setTimeout(() => showTip(c), 450);
 });
+document.addEventListener('pointerout', e => {
+  if (e.pointerType !== 'mouse') return;
+  const c = e.target.closest('.cd[data-cal]');
+  if (c && !c.contains(e.relatedTarget)) hideTip();
+});
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse') return;
+  const c = e.target.closest('.cd[data-cal]');
+  if (!c) {if (!tip.hidden) hideTip(); return}
+  clearTimeout(tipTimer); tipTimer = setTimeout(() => {showTip(c); tipSuppress = true}, 450);
+});
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, e => {if (e.pointerType !== 'mouse') clearTimeout(tipTimer)}));
+addEventListener('scroll', () => {if (!tip.hidden && !tipSuppress) hideTip()}, {passive: true});
+document.addEventListener('contextmenu', e => {if (e.target.closest('.cd[data-cal]')) e.preventDefault()});
 setInterval(tick, 500);
 document.addEventListener('visibilitychange', () => {if (!document.hidden) {tick(); wake()}});
 
