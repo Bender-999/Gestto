@@ -1,0 +1,32 @@
+# Decisiones tomadas
+
+Estas respuestas las dio el usuario. No se cambian sin preguntarle.
+
+| Tema | Decisión |
+|---|---|
+| Revisión | Cronómetro hacia arriba sin tiempo objetivo. Cuenta como estudio, pero el plan no le reserva tiempo, salvo el % opcional por asignatura |
+| Tiempo agotado | La cuenta atrás sigue en negativo, sin sonido |
+| Exámenes | Problema a problema, salvo los marcados como simulacro, que van enteros con un solo temporizador |
+| Entrada de la IA | Copiar y pegar un JSON con formato fijo (`hoja-carga/1`) |
+| Reparto | Dos modos: prioridad y fecha, o porcentajes por día (lo libre se reparte entre las demás). Las tareas siempre se ordenan por prioridad |
+| Mínimos diarios | Se cubren primero y el resto va según el modo. Si no caben en un día, solo se avisa y ese día no se aplican |
+| Bloques | Una asignatura por bloque al día, las más importantes antes, sin intercalar salvo cambio manual |
+| Fin de bloque | Si una tarea queda a medias y queda día, el bloque se alarga hasta acabarla |
+| Horario | Se rellenan los días que se marcan, editables uno a uno. Se descuentan minutos de descanso por hora de estudio |
+| Botón de parada | Parar abre Pausa o Acabar día. La pausa no cuenta como estudio ni como descanso |
+| En espera | Una asignatura entra en el plan si tiene tareas o si su fecha está a menos de 30 días (editable). Con fecha cercana y sin tareas, avisa |
+| Tareas manuales | Desde Plan, con minutos aproximados. Desde Sesión, sin minutos: cuenta lo que tardes como estudio de esa asignatura |
+| Reimportar | Actualiza conservando el progreso por id de tarea y no toca las tareas manuales |
+| Uso | Solo para el usuario, sincronizado entre sus dispositivos (Windows e iPhone) |
+| Sesión con varias asignaturas | Primero una asignatura y luego otra, sin saltar entre ellas |
+
+## Añadidas en la versión 2 (16 de noviembre de 2026)
+
+| Tema | Decisión |
+|---|---|
+| Plataforma | App web instalable (PWA) en Windows y en el iPhone, con los datos sincronizados |
+| Sincronización | Firebase (Firestore y cuenta de Google). Se descartaron Google Drive y OneDrive porque guardan archivos enteros y el móvil y el PC se pisarían |
+| Estética | Se mantienen la paleta y las tipografías. Todo redondeado: «tan cuadrado se ve antiguo» |
+| Controles | Nada de desplegables, campos numéricos ni selectores de hora nativos. Se usan botones − y +, fichas, bloques, interruptores, un calendario y un desplegable propios |
+| Horario | Varias franjas por día. Doble clic en un hueco añade una franja, arrastrar la mueve y los bordes la alargan. Doble clic sobre una franja abre sus horas de estudio en hh:mm, donde también se borra. Sin botones de inicio y fin |
+| Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |
