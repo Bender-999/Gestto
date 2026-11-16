@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>La Hoja</title>
+<meta name="description" content="Planificador de estudio: reparte tus horas entre asignaturas y proyectos, con temporizador y estadísticas.">
+<meta name="theme-color" content="#ecefe6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151912" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="La Hoja">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="account" hidden></div>
+  <header class="head" id="headblock">
+    <div class="eyebrow">La Hoja</div>
+    <h1 id="verdict"></h1>
+    <p class="lead" id="lead"></p>
+  </header>
+  <div class="chart" id="chart"></div>
+  <nav class="scopes" id="scopes" aria-label="Asignaturas"></nav>
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-view="config" id="v-config">Configuración</button>
+    <button class="tab" role="tab" data-view="plan" id="v-plan">Plan</button>
+    <button class="tab" role="tab" data-view="sesion" id="v-sesion">Sesión</button>
+    <button class="tab" role="tab" data-view="datos" id="v-datos">Mis datos</button>
+    <button class="btn top-start" id="startBtn" data-act="go">Empezar día</button>
+  </div>
+  <main id="main" style="display:grid;grid-template-columns:minmax(0,1fr);gap:24px"></main>
+  <p class="status" id="status"></p>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

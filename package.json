@@ -1,0 +1,15 @@
+{
+  "name": "la-hoja",
+  "version": "2.0.1",
+  "private": true,
+  "description": "Planificador de estudio: reparte horas entre asignaturas y proyectos, con temporizador y estadísticas. App web instalable (PWA).",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve -l 5173 .",
+    "test": "node --test",
+    "deploy": "npx --yes firebase-tools deploy"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
