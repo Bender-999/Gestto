@@ -103,17 +103,24 @@ function normalize(o){
   const dt=(v,w)=>{if(!v)return '';if(!isDate(v)){e.push(`${w}: la fecha «${v}» debe ir como AAAA-MM-DD.`);return ''}return v};
   if(!a.nombre)e.push('Falta el nombre de la asignatura o proyecto.');
   const id=slug(a.id||a.nombre);
-  const s={id,nombre:String(a.nombre||''),tipo:a.tipo==='proyecto'?'proyecto':'asignatura',limite:dt(a.fecha_limite,'Fecha límite general'),prio:lv(a.prioridad,2),revDef:a.revision!==false,revPct:Math.max(0,+a.revision_reservada_pct||0),minDia:Math.max(0,+a.minimo_horas_dia||0),notas:String(a.notas||''),grupos:[]};
+  const limArr=Array.isArray(a.fechas_limite)&&a.fechas_limite.length?a.fechas_limite.map((l,i)=>({id:slug(l.id||l.nombre||String(i+1)),nombre:String(l.nombre||l.id||('Fecha '+(i+1))),fecha:dt(l.fecha,'fechas_limite['+i+'].fecha'),empezarAntes:Math.max(0,+l.empezar_antes||0)})).filter(l=>l.fecha):[];
+  const limFallback=dt(a.fecha_limite,'Fecha límite general');
+  if(!limArr.length&&limFallback)limArr.push({id:'examen',nombre:'Fecha límite',fecha:limFallback,empezarAntes:Math.max(0,+a.empezar_antes||0)});
+  const s={id,nombre:String(a.nombre||''),tipo:a.tipo==='proyecto'?'proyecto':'asignatura',limite:limArr[0]?.fecha||'',limites:limArr,prio:lv(a.prioridad,2),revDef:a.revision!==false,revPct:Math.max(0,+a.revision_reservada_pct||0),minDia:Math.max(0,+a.minimo_horas_dia||0),notas:String(a.notas||''),grupos:[]};
   if(a.grupos!==undefined&&!Array.isArray(a.grupos))e.push('«grupos» debe ser una lista.');
   const gids=new Set(),tids=new Set(),deps=[];
   (a.grupos||[]).forEach((g,gi)=>{
     const gn=g.nombre||('Grupo '+(gi+1)),gid=slug(g.id||gn);
     if(gids.has(gid))e.push(`Hay dos grupos con el identificador «${gid}».`);gids.add(gid);
-    const tipo=['ejercicios','examen','bloque','recurrente'].includes(g.tipo)?g.tipo:'bloque';
-    const G={id:gid,nombre:String(gn),tipo,prio:lv(g.prioridad,s.prio),freq:String(g.frecuencia||''),sim:!!g.simulacro,limite:dt(g.fecha_limite,`Grupo «${gn}»`),tareas:[]};
+    const tipo=['ejercicios','examen','bloque','recurrente','diaria'].includes(g.tipo)?g.tipo:'bloque';
+    const G={id:gid,nombre:String(gn),tipo,prio:lv(g.prioridad,s.prio),freq:String(g.frecuencia||''),sim:!!g.simulacro,limite:dt(g.fecha_limite,`Grupo «${gn}»`),limiteId:g.limite_id?slug(g.limite_id):'',tareas:[]};
     if(tipo==='recurrente'){
       G.minSem=+g.minutos_por_semana||0;G.bloque=+g.minutos_por_bloque||60;G.det=String(g.detalle||'');G.rev=g.revision;
       if(G.minSem<=0)e.push(`Grupo recurrente «${gn}»: falta «minutos_por_semana».`);
+      if(tids.has(gid))e.push(`Identificador repetido: «${gid}».`);tids.add(gid);
+    }else if(tipo==='diaria'){
+      G.minDia=Math.max(0,+g.minutos_por_dia||0);G.det=String(g.detalle||'');
+      if(G.minDia<=0)e.push(`Grupo diaria «${gn}»: falta «minutos_por_dia» mayor que 0.`);
       if(tids.has(gid))e.push(`Identificador repetido: «${gid}».`);tids.add(gid);
     }else{
       if(!Array.isArray(g.tareas)||!g.tareas.length)e.push(`Grupo «${gn}»: falta la lista «tareas».`);
@@ -121,7 +128,7 @@ function normalize(o){
         const tn=t.nombre||('Tarea '+(ti+1)),tid=slug(t.id||(gid+'-'+tn));
         if(tids.has(tid))e.push(`Identificador de tarea repetido: «${tid}».`);tids.add(tid);
         const min=+t.minutos;if(!(min>0))e.push(`Tarea «${tn}» de «${gn}»: «minutos» debe ser un número mayor que 0.`);
-        const T={id:tid,nombre:String(tn),det:String(t.detalle||''),min:min||0,limite:dt(t.fecha_limite,`Tarea «${tn}»`),dep:(Array.isArray(t.depende_de)?t.depende_de:[]).map(slug)};
+        const T={id:tid,nombre:String(tn),det:String(t.detalle||''),min:min||0,limite:dt(t.fecha_limite,`Tarea «${tn}»`),limiteId:t.limite_id?slug(t.limite_id):'',dep:(Array.isArray(t.depende_de)?t.depende_de:[]).map(slug)};
         if(t.prioridad!==undefined)T.prio=lv(t.prioridad,G.prio);
         if(t.revision===true||t.revision===false)T.rev=t.revision;
         if(t.dep_ok)T.dep_ok=true;
@@ -137,8 +144,8 @@ function normalize(o){
   return e.length?{ok:false,errors:e}:{ok:true,sub:s};
 }
 function emptyProgress(){return {lvl:{},mins:{},done:{},real:{},target:'',pct:0,activa:true}}
-function emptySub(nombre,limite){return {id:slug(nombre),nombre:String(nombre).trim(),tipo:'asignatura',limite:isDate(limite)?limite:'',prio:2,revDef:true,revPct:0,minDia:0,notas:'',grupos:[]}}
-function taskCount(s){return s.grupos.reduce((a,g)=>a+(g.tipo==='recurrente'?1:g.tareas.length),0)}
+function emptySub(nombre,limite){const f=isDate(limite)?limite:'';return {id:slug(nombre),nombre:String(nombre).trim(),tipo:'asignatura',limite:f,limites:f?[{id:'examen',nombre:'Fecha límite',fecha:f,empezarAntes:0}]:[],prio:2,revDef:true,revPct:0,minDia:0,notas:'',grupos:[]}}
+function taskCount(s){return s.grupos.reduce((a,g)=>a+(g.tipo==='recurrente'||g.tipo==='diaria'?1:(g.tareas||[]).length),0)}
 function subState(S,s,today){
   if(s.activa===false)return 'pausa';
   const has=taskCount(s)>0,near=s.limite&&s.limite>=today&&s.limite<=addDays(today,+S.app.standby||30);
@@ -157,7 +164,7 @@ function removeManual(S,key){
   g.tareas=g.tareas.filter(t=>t.id!==id);delete s.done[key];delete s.real[key];delete s.mins[key];delete s.lvl[key];
   if(!g.tareas.length)s.grupos=s.grupos.filter(x=>x!==g);
 }
-function taskIndex(s){const m=new Map();s.grupos.filter(g=>!g.manual).forEach(g=>{if(g.tipo==='recurrente')m.set(g.id,{nombre:g.nombre,min:g.minSem,g:g.nombre});g.tareas.forEach(t=>m.set(t.id,{nombre:t.nombre,min:t.min,g:g.nombre}))});return m}
+function taskIndex(s){const m=new Map();s.grupos.filter(g=>!g.manual).forEach(g=>{if(g.tipo==='recurrente')m.set(g.id,{nombre:g.nombre,min:g.minSem,g:g.nombre});else if(g.tipo==='diaria')m.set(g.id,{nombre:g.nombre,min:g.minDia,g:g.nombre});else(g.tareas||[]).forEach(t=>m.set(t.id,{nombre:t.nombre,min:t.min,g:g.nombre}))});return m}
 function diffSub(old,nw){
   const a=old?taskIndex(old):new Map(),b=taskIndex(nw),added=[],removed=[],changed=[];
   for(const [k,v] of b){const o=a.get(k);if(!o)added.push(v.nombre);else if(o.min!==v.min)changed.push(`${v.nombre}: ${o.min} → ${v.min} min`)}
@@ -174,7 +181,8 @@ function applySub(S,nw){
 
 function exportSub(s){
   const lv=l=>({1:'alta',2:'media',3:'baja',0:'fuera'})[l];
-  return {formato:FORMATO,asignatura:{id:s.id,nombre:s.nombre,tipo:s.tipo,prioridad:lv(s.prio),fecha_limite:s.limite||null,revision:s.revDef,revision_reservada_pct:s.revPct||0,notas:s.notas||undefined,minimo_horas_dia:s.minDia||undefined,grupos:s.grupos.filter(g=>!g.manual).map(g=>g.tipo==='recurrente'?{id:g.id,nombre:g.nombre,tipo:g.tipo,prioridad:lv(g.prio),minutos_por_semana:g.minSem,minutos_por_bloque:g.bloque,detalle:g.det||undefined}:{id:g.id,nombre:g.nombre,tipo:g.tipo,prioridad:lv(g.prio),frecuencia:g.freq||undefined,simulacro:g.sim||undefined,fecha_limite:g.limite||undefined,tareas:g.tareas.map(t=>({id:t.id,nombre:t.nombre,detalle:t.det||undefined,minutos:+s.mins[s.id+'/'+t.id]||t.min,prioridad:t.prio===undefined?undefined:lv(t.prio),fecha_limite:t.limite||undefined,depende_de:t.dep.length?t.dep:undefined,revision:t.rev}))})}};
+  const lims=s.limites&&s.limites.length>1?{fechas_limite:s.limites.map(l=>({id:l.id,nombre:l.nombre,fecha:l.fecha,...(l.empezarAntes?{empezar_antes:l.empezarAntes}:{})}))}:{fecha_limite:s.limite||null,...(s.limites&&s.limites[0]&&s.limites[0].empezarAntes?{empezar_antes:s.limites[0].empezarAntes}:{})};
+  return {formato:FORMATO,asignatura:{id:s.id,nombre:s.nombre,tipo:s.tipo,prioridad:lv(s.prio),...lims,revision:s.revDef,revision_reservada_pct:s.revPct||0,notas:s.notas||undefined,minimo_horas_dia:s.minDia||undefined,grupos:s.grupos.filter(g=>!g.manual).map(g=>{const gb={id:g.id,nombre:g.nombre,tipo:g.tipo,prioridad:lv(g.prio),...(g.limiteId?{limite_id:g.limiteId}:{})};if(g.tipo==='recurrente')return{...gb,minutos_por_semana:g.minSem,minutos_por_bloque:g.bloque,detalle:g.det||undefined};if(g.tipo==='diaria')return{...gb,minutos_por_dia:g.minDia,detalle:g.det||undefined};return{...gb,frecuencia:g.freq||undefined,simulacro:g.sim||undefined,fecha_limite:g.limite||undefined,tareas:(g.tareas||[]).map(t=>({id:t.id,nombre:t.nombre,detalle:t.det||undefined,minutos:+s.mins[s.id+'/'+t.id]||t.min,prioridad:t.prio===undefined?undefined:lv(t.prio),fecha_limite:t.limite||undefined,...(t.limiteId?{limite_id:t.limiteId}:{}),depende_de:t.dep.length?t.dep:undefined,revision:t.rev}))}})}};
 }
 
 /* Tareas */
@@ -186,10 +194,12 @@ function buildItems(S,today){
   for(const sid of active){
     const s=S.subs[sid],sr=rank.indexOf(sid);
     s.grupos.forEach((g,gi)=>{
-      const lim=minDate(g.limite,s.limite),gk=sid+'/g:'+g.id;
+      const gLim=getLimitDate(s,g.limiteId),lim=minDate(g.limite,gLim),gk=sid+'/g:'+g.id;
       const base={sid,subName:s.nombre,gid:g.id,gName:g.nombre,gi,sr};
       if(g.tipo==='recurrente'){
+        const notBef=getNotBefore(s,g.limiteId);
         for(const w of weeksOf(S)){
+          if(notBef&&w<notBef)continue;
           const n=Math.max(1,Math.ceil(g.minSem/g.bloque));
           for(let k=0;k<n;k++){
             const key=`${sid}/${g.id}@${w}#${k+1}`,m=k<n-1?g.bloque:g.minSem-g.bloque*(n-1),done=s.done[key];
@@ -198,18 +208,35 @@ function buildItems(S,today){
             out.push({...base,key,ti:k,name:`${g.nombre} · ${k+1} de ${n}`,det:g.det||'Bloque de la semana del '+w.slice(8)+'/'+w.slice(5,7),m:+s.mins[key]||m,base:m,lvl:s.lvl[gk]??g.prio,limit,notBefore:w,deps:[],rev:g.rev??s.revDef,done:done||''});
           }
         }
+      }else if(g.tipo==='diaria'){
+        const doneKey=sid+'/'+g.id;
+        if(s.done&&s.done[doneKey])return;
+        const notBef=getNotBefore(s,g.limiteId);
+        for(const dayEntry of S.app.days){
+          const d=dayEntry.d;
+          if(d<today)continue;
+          if(lim&&d>=lim)continue;
+          if(notBef&&d<notBef)continue;
+          const key=`${sid}/${g.id}@${d}`;
+          const dayLim=lim?minDate(addDays(d,1),lim):addDays(d,1);
+          out.push({...base,key,ti:0,name:g.nombre,det:g.det||'',m:g.minDia,base:g.minDia,lvl:s.lvl[gk]??g.prio,limit:dayLim,notBefore:d,deps:[],rev:false,done:s.done&&s.done[key]?s.done[key]:'',mandatory:true});
+        }
       }else if(g.sim){
         const pend=g.tareas.filter(t=>!s.done[sid+'/'+t.id]),list=pend.length?pend:g.tareas,m=list.reduce((a,t)=>a+(+s.mins[sid+'/'+t.id]||t.min),0);
         out.push({...base,key:gk,ti:0,unit:true,children:list.map(t=>sid+'/'+t.id),name:g.nombre+' · simulacro',det:list.length+' partes con un solo temporizador',m,base:m,lvl:s.lvl[gk]??g.prio,limit:lim,notBefore:'',deps:[],rev:s.revDef,done:pend.length?'':(s.done[sid+'/'+g.tareas[0].id]||'x')});
-      }else g.tareas.forEach((t,ti)=>{
+      }else(g.tareas||[]).forEach((t,ti)=>{
         const key=sid+'/'+t.id;
-        out.push({...base,key,ti,name:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:minDate(t.limite,lim),notBefore:'',deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
+        const tLim=minDate(t.limite,getLimitDate(s,t.limiteId||g.limiteId));
+        const notBef=getNotBefore(s,t.limiteId||g.limiteId);
+        out.push({...base,key,ti,name:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:tLim,notBefore:notBef,deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
       });
     });
   }
   return out;
 }
 function cmpItems(a,b){return a.lvl-b.lvl||(a.limit||FAR).localeCompare(b.limit||FAR)||a.sr-b.sr||a.gi-b.gi||a.ti-b.ti}
+function getLimitDate(s,limiteId){if(!limiteId)return s.limite||'';const l=(s.limites||[]).find(x=>x.id===limiteId);return l?l.fecha:(s.limite||'')}
+function getNotBefore(s,limiteId){const l=s.limites&&s.limites.find(x=>x.id===limiteId);if(!l||!l.fecha||!l.empezarAntes)return '';return addDays(l.fecha,-l.empezarAntes)}
 function pace(S,sid){
   let e=0,r=0;const s=S.subs[sid];if(!s)return {ritmo:1,logged:false};
   for(const it of buildItems(S,'0000-00-00'))if(it.sid===sid&&it.done&&s.real[it.key]){e+=it.m;r+=s.real[it.key]}
@@ -278,6 +305,9 @@ function allocate(S,today,opt){
       }
       return;
     }
+    const dailyBudget=new Map();
+    for(const p of pend){const lim=p.it.limit,dLeft=(lim?open.slice(oi).filter(o=>o<lim).length:(open.length-oi))||1;dailyBudget.set(p.it.key,Math.ceil(p.left/dLeft));}
+    const usedToday=new Map();
     let guard=500;
     while(rem[d]>=MIN_CHUNK&&guard--){
       let D='',slack=Infinity;
@@ -290,9 +320,13 @@ function allocate(S,today,opt){
       }
       let p=D?pend.filter(x=>x.it.limit&&x.it.limit<=D).sort((a,b)=>cmpItems(a.it,b.it)).find(x=>elig(x,d,rem[d])):null;
       const urgent=!!p;
-      if(!p)p=pend.find(x=>elig(x,d,rem[d]));
+      if(!p)p=pend.find(x=>elig(x,d,rem[d])&&(usedToday.get(x.it.key)||0)<(dailyBudget.get(x.it.key)||x.left));
       if(!p)break;
-      take(p,d,Math.min(p.left,rem[d],urgent||p.it.unit?Infinity:Math.max(MIN_CHUNK,slack)));
+      const budget=dailyBudget.get(p.it.key)||p.left,used=usedToday.get(p.it.key)||0;
+      const n=Math.min(p.left,rem[d],urgent||p.it.unit?rem[d]:Math.max(MIN_CHUNK,budget-used));
+      if(n<=0)break;
+      take(p,d,n);
+      usedToday.set(p.it.key,(usedToday.get(p.it.key)||0)+n);
     }
   });
   const dayList=days.map(x=>x.d);
@@ -476,4 +510,4 @@ function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};

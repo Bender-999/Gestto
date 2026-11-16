@@ -76,7 +76,7 @@ function renderHead(al, ob) {
     if (!o || !o.t) {const w = subState(S, s, TODAY); $('verdict').textContent = w === 'pausa' ? s.nombre + ' está en pausa.' : w === 'espera' ? s.nombre + ' está en espera.' : w === 'sin-tareas' ? s.nombre + ' necesita tareas.' : 'No queda nada pendiente en ' + s.nombre + '.'; $('lead').textContent = w === 'espera' ? 'Entrará en el plan cuando tenga tareas o una fecha cercana.' : w === 'sin-tareas' ? 'Su fecha se acerca. Añade tareas abajo o con un texto de la IA.' : ''}
     else {
       $('verdict').textContent = o.miss > 0 ? `A ${s.nombre} le faltan ${fmt(o.miss)} para tu objetivo.` : `${s.nombre} llega a tu objetivo.`;
-      $('lead').textContent = `Tu objetivo llega hasta ${o.t.name} y pide ${fmt(o.need)}.` + (s.limite ? ` Fecha límite: ${dayLabel(s.limite)}.` : '');
+      $('lead').textContent = `Tu objetivo llega hasta ${o.t.name} y pide ${fmt(o.need)}.` + (s.limites&&s.limites.length>1?' Fechas: '+s.limites.map(l=>l.nombre+' '+dayLabel(l.fecha)).join(', ')+'.' : s.limite?` Fecha límite: ${dayLabel(s.limite)}.`:'');
     }
   }
   const open = al.days.filter(d => !d.closed), maxM = Math.max(60, ...open.map(d => Math.max(d.h * 60, al.plan[d.d].reduce((a, r) => a + r.m, 0))));
@@ -160,7 +160,7 @@ function scheduleBlock() {
    <div class="row-btns"><button class="btn ghost" data-applysched="1">Aplicar el horario a mis próximos días</button></div></section>`;
 }
 function daysBlock() {
-  const days = [...S.app.days].sort((a, b) => a.d < b.d ? -1 : 1), lims = S.app.order.map(i => S.subs[i].limite).filter(Boolean);
+  const days = [...S.app.days].sort((a, b) => a.d < b.d ? -1 : 1), lims = [...new Set(S.app.order.flatMap(i => {const s=S.subs[i];return s.limites&&s.limites.length?s.limites.map(l=>l.fecha):(s.limite?[s.limite]:[])}).filter(Boolean))];
   const [y, m] = month.split('-').map(Number), first = new Date(Date.UTC(y, m - 1, 1)), lead = (first.getUTCDay() + 6) % 7, len = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const nm = first.toLocaleDateString('es-ES', {timeZone: 'UTC', month: 'long', year: 'numeric'});
   let cells = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => `<span>${d}</span>`).join('') + '<i></i>'.repeat(lead);
@@ -181,7 +181,7 @@ const plural = n => n.endsWith('s') ? n : n + 's';
 /* Ficha de un día al dejar el cursor encima (o mantener pulsado en el móvil). */
 function dayTipHTML(d) {
   const x = S.app.days.find(y => y.d === d), past = d < TODAY, wi = L.weekIdx(d), sch = L.schedSlots(S.app, wi);
-  const lims = S.app.order.filter(i => S.subs[i].limite === d).map(i => S.subs[i].nombre);
+  const lims = S.app.order.filter(i => {const s=S.subs[i];return s.limites&&s.limites.length?s.limites.some(l=>l.fecha===d):s.limite===d;}).map(i => S.subs[i].nombre);
   let body = '';
   if (!x) body = `<p>${past ? 'Día pasado sin estudio.' : 'Libre. Pulsa para añadirlo.'}</p>` + (!past && sch.length ? `<p class="mut">Tu horario de los ${plural(DAYS[wi].toLowerCase())}: ${sch.map(y => y.ini + '–' + y.fin).join(' · ')}</p>` : '');
   else {
@@ -222,7 +222,8 @@ function renderGeneral(al, ob) {
   const rows = S.app.order.map((id, i) => {
     const s = S.subs[id], o = ob.list.find(x => x.sid === id);
     const w = subState(S, s, TODAY), tag = w === 'espera' ? '<span class="tagst">En espera</span>' : w === 'sin-tareas' ? '<span class="tagst w">Faltan tareas</span>' : w === 'pausa' ? '<span class="tagst">En pausa</span>' : '';
-    return `<div class="pr"><div class="w"><b>${sw(id)}${esc(s.nombre)}${tag}</b><small>${w === 'espera' ? 'Sin tareas todavía' : w === 'sin-tareas' ? 'Su fecha se acerca' : w === 'pausa' ? 'No entra en el plan' : o && o.need ? (o.miss ? 'Faltan ' + fmt(o.miss) + ' de ' + fmt(o.need) : 'Llega · ' + fmt(o.need)) : 'Sin pendientes'}${s.limite ? ' · hasta ' + dayLabel(s.limite) : ''}</small></div>
+    const limLabel=s.limites&&s.limites.length>1?' · '+s.limites.map(l=>dayLabel(l.fecha)).join(', '):s.limite?' · hasta '+dayLabel(s.limite):'';
+    return `<div class="pr"><div class="w"><b>${sw(id)}${esc(s.nombre)}${tag}</b><small>${w === 'espera' ? 'Sin tareas todavía' : w === 'sin-tareas' ? 'Su fecha se acerca' : w === 'pausa' ? 'No entra en el plan' : o && o.need ? (o.miss ? 'Faltan ' + fmt(o.miss) + ' de ' + fmt(o.need) : 'Llega · ' + fmt(o.need)) : 'Sin pendientes'}${limLabel}</small></div>
     <div class="pr-ctl"><div class="field"><span class="lbl">Mín. al día</span>${stepper({key: 'minsub', id, value: s.minDia || 0, step: .25, min: 0, max: 12, fmt: hTxt, label: 'Mínimo diario de ' + s.nombre, size: 'sm'})}</div>
     ${pct ? `<div class="field"><span class="lbl">Parte</span>${stepper({key: 'pct', id, value: s.pct || 0, step: 5, min: 0, max: 100, fmt: v => v + ' %', label: 'Porcentaje de ' + s.nombre, size: 'sm'})}</div>` : `<div class="field"><span class="lbl">Prioridad</span>${seg({key: 'sprio', id, value: s.prio, options: PRIO, label: 'Prioridad de ' + s.nombre, size: 'sm'})}</div>`}
     ${toggle({key: 'active', id, value: s.activa !== false, label: 'Activa'})}
@@ -248,24 +249,24 @@ function renderSubject(al, ob) {
     return `<label class="lr ${r === t ? 'tg' : ''}" for="tg-${i}"><input type="radio" name="target" id="tg-${i}" data-target="${esc(r.key)}" ${r === t ? 'checked' : ''}><span class="w"><span>${chip(r.lvl)}${esc(r.name)}</span><small>${r.n} ${r.n === 1 ? 'tarea' : 'tareas'} · ${fmt(r.m)}</small></span>${st}</label>`;
   }).join('') : '';
   const groups = s.grupos.map((g, i) => {
-    const l = items.filter(x => x.gid === g.id), rec = g.tipo === 'recurrente', open = expanded.has(scope + g.id), lv = rec || g.sim ? [l[0] ? l[0].lvl : g.prio] : [...new Set(l.map(x => x.lvl))], mix = lv.length > 1, m = rec ? g.minSem : g.tareas.reduce((a, t) => a + (+s.mins[scope + '/' + t.id] || t.min), 0);
-    const sub = rec ? `${fmt(g.minSem)} por semana` : `${g.tareas.length} tareas · ${fmt(m)}${g.freq ? ' · ' + esc(g.freq) : ''}`;
-    const tasks = g.tareas.map(t => {
+    const l = items.filter(x => x.gid === g.id), rec = g.tipo === 'recurrente', dia = g.tipo === 'diaria', open = expanded.has(scope + g.id), lv = rec || dia || g.sim ? [l[0] ? l[0].lvl : g.prio] : [...new Set(l.map(x => x.lvl))], mix = lv.length > 1, m = rec ? g.minSem : dia ? g.minDia : (g.tareas||[]).reduce((a, t) => a + (+s.mins[scope + '/' + t.id] || t.min), 0);
+    const sub = rec ? `${fmt(g.minSem)} por semana` : dia ? `${fmt(g.minDia)} al día${g.det?' · '+esc(g.det):''}` : `${(g.tareas||[]).length} tareas · ${fmt(m)}${g.freq ? ' · ' + esc(g.freq) : ''}`;
+    const tasks = !rec && !dia ? (g.tareas||[]).map(t => {
       const k = scope + '/' + t.id;
       return `<div class="si"><div class="w"><span>${esc(t.nombre)}</span><small>${esc(t.det)}${t.limite ? ' · hasta ' + dayLabel(t.limite) : ''}${t.dep.length ? ' · tras ' + t.dep.map(esc).join(', ') : ''}</small></div>
       <div class="si-ctl">${stepper({key: 'min', id: k, base: t.min, value: +s.mins[k] || t.min, step: 5, min: 5, max: 900, fmt: v => v + ' min', label: 'Minutos de ' + t.nombre, size: 'sm'})}
       ${g.sim ? '' : seg({key: 'ilvl', id: k, value: s.lvl[k] ?? t.prio ?? g.prio, options: PRIO4, label: 'Prioridad de ' + t.nombre, size: 'xs'})}${t.manual ? `<button class="icon round" data-delman="${esc(k)}" aria-label="Quitar ${esc(t.nombre)}">×</button>` : ''}</div></div>`;
-    }).join('');
-    return `<div class="pr grp">${rec ? '<span class="exp"></span>' : `<button class="exp" data-exp="${esc(g.id)}" aria-expanded="${open}" aria-label="Desplegar ${esc(g.nombre)}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${open ? 'M5 8l5 5 5-5' : 'M8 5l5 5-5 5'}"/></svg></button>`}
+    }).join('') : '';
+    return `<div class="pr grp">${rec || dia ? '<span class="exp"></span>' : `<button class="exp" data-exp="${esc(g.id)}" aria-expanded="${open}" aria-label="Desplegar ${esc(g.nombre)}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${open ? 'M5 8l5 5 5-5' : 'M8 5l5 5-5 5'}"/></svg></button>`}
      <div class="w"><b>${esc(g.nombre)}</b><small>${sub}</small></div>
-     <div class="pr-ctl">${seg({key: 'glvl', id: g.id, value: mix ? '' : lv[0], options: PRIO4, label: 'Prioridad de ' + g.nombre + (mix ? ' (mixta)' : ''), size: 'xs'})}
+     <div class="pr-ctl">${dia ? toggle({key:'diariadone',id:g.id,value:!!(s.done&&s.done[scope+'/'+g.id]),label:'Marcar como acabada'}) : seg({key: 'glvl', id: g.id, value: mix ? '' : lv[0], options: PRIO4, label: 'Prioridad de ' + g.nombre + (mix ? ' (mixta)' : ''), size: 'xs'})}
      <div class="updown"><button class="icon round" data-gmv="${esc(g.id)}" data-d="-1" aria-label="Subir ${esc(g.nombre)}" ${i ? '' : 'disabled'}>↑</button><button class="icon round" data-gmv="${esc(g.id)}" data-d="1" aria-label="Bajar ${esc(g.nombre)}" ${i < s.grupos.length - 1 ? '' : 'disabled'}>↓</button></div></div></div>
-     ${open && !rec ? `<div class="sub-items">${g.manual ? '' : `<div class="si">${toggle({key: 'sim', id: g.id, value: !!g.sim, label: 'Simulacro: todo el mismo día con un solo temporizador'})}</div>`}${tasks}</div>` : ''}`;
+     ${open && !rec && !dia ? `<div class="sub-items">${g.manual ? '' : `<div class="si">${toggle({key: 'sim', id: g.id, value: !!g.sim, label: 'Simulacro: todo el mismo día con un solo temporizador'})}</div>`}${tasks}</div>` : ''}`;
   }).join('');
   $('main').innerHTML = `<div class="cfg"><div>
    <section class="card"><h2>${esc(s.nombre)}</h2><div class="fields">
     <div class="field wide"><label class="lbl" for="f-nombre">Nombre</label><input id="f-nombre" type="text" value="${esc(s.nombre)}"></div>
-    <div class="field"><span class="lbl">Fecha límite</span>${datePick({key: 'limite', value: s.limite, open: pick === 'limite|', month: pickMonth, today: TODAY, label: 'Fecha límite de ' + s.nombre})}</div>
+    ${s.limites&&s.limites.length>1 ? s.limites.map(l=>`<div class="field"><span class="lbl">${esc(l.nombre)}</span><span class="num" style="font-size:.85em">${l.fecha?dayLabel(l.fecha):'—'}</span><span class="lbl" style="margin-left:8px">Empezar</span>${stepper({key:'limEmpezar',id:l.id,value:l.empezarAntes||0,step:1,min:0,max:365,fmt:v=>v?v+' días antes':'El mismo día',label:'Días antes de '+esc(l.nombre),size:'sm'})}</div>`).join('') : `<div class="field"><span class="lbl">Fecha límite</span>${datePick({key:'limite',value:s.limite,open:pick==='limite|',month:pickMonth,today:TODAY,label:'Fecha límite de '+s.nombre})}</div>${s.limites&&s.limites[0]?`<div class="field"><span class="lbl">Empezar antes</span>${stepper({key:'limEmpezar',id:(s.limites[0]||{id:'examen'}).id,value:(s.limites[0]||{empezarAntes:0}).empezarAntes||0,step:1,min:0,max:365,fmt:v=>v?v+' días antes':'El mismo día',label:'Días antes de la fecha límite',size:'sm'})}</div>`:''}`}
     <div class="field"><span class="lbl">Prioridad</span>${seg({key: 'prio', value: s.prio, options: PRIO, label: 'Prioridad de ' + s.nombre})}</div>
     <div class="field"><span class="lbl">Mínimo al día</span>${stepper({key: 'minDia', value: s.minDia || 0, step: .25, min: 0, max: 12, fmt: hTxt, label: 'Mínimo de horas al día'})}</div>
     <div class="field wide"><span class="lbl">Reservar para revisar: <b>${s.revPct || 0} %</b></span>${blocks({key: 'revPct', value: Math.min(50, s.revPct || 0), values: [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50], label: 'Porcentaje para revisar', fmt: v => v + ' %'})}</div></div>
@@ -440,7 +441,9 @@ function applySet(key, id, val, el) {
     case 'sprio': S.subs[id].prio = n; break;
     case 'active': S.subs[id].activa = b; break;
     case 'closed': if (b) S.app.closed[id] = true; else delete S.app.closed[id]; break;
-    case 'limite': curSub().limite = val; pick = null; break;
+    case 'limite': {const s=curSub();s.limite=val;if(!s.limites)s.limites=[];if(s.limites.length){s.limites[0].fecha=val}else{s.limites.push({id:'examen',nombre:'Fecha límite',fecha:val,empezarAntes:0})}pick=null;break}
+    case 'limEmpezar': {const s=curSub();if(!s.limites)s.limites=[];const li=s.limites.find(x=>x.id===id);if(li)li.empezarAntes=+val;break}
+    case 'diariadone': {const s=curSub();if(val==='true')s.done[scope+'/'+id]=TODAY;else delete s.done[scope+'/'+id];break}
     case 'prio': curSub().prio = n; break;
     case 'minDia': curSub().minDia = n; break;
     case 'revPct': curSub().revPct = n; break;
