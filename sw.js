@@ -1,6 +1,6 @@
 /* Service worker: guarda la app para abrirla sin conexión.
    Sube VERSION cada vez que publiques cambios para que los dispositivos cojan la versión nueva. */
-const VERSION = 'hoja-carga-v2.0.0';
+const VERSION = 'la-hoja-v2.0.1';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/base.css', 'css/styles.css',
   'js/main.js', 'js/ui.js', 'js/logic.js', 'js/controls.js', 'js/storage.js', 'js/firebase-config.js', 'js/sample.js', 'js/prompt.js',

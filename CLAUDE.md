@@ -4,13 +4,14 @@ Guía para trabajar en este repositorio con Claude Code.
 
 ## Qué es
 
-La Hoja de carga de estudio es un planificador personal de un único usuario, estudiante de Ingeniería Aeroespacial. Lo usa en Windows y en el iPhone y quiere los datos sincronizados entre los dos. Toda la interfaz está en español de España.
+La Hoja (antes «Hoja de carga de estudio») es un planificador personal de un único usuario, estudiante de Ingeniería Aeroespacial. Lo usa en Windows y en el iPhone y quiere los datos sincronizados entre los dos. Toda la interfaz está en español de España.
 
 ## Cómo trabajar
 
 - **Pregunta antes de construir** si algo no está claro o toca una decisión de `docs/decisiones.md`. El usuario prefiere responder preguntas antes que rehacer trabajo.
 - Prueba los cambios: `npm test` para la lógica y `npm start` para verla en `http://localhost:5173`.
 - Antes de publicar, sube `VERSION` en `sw.js`. Si no, los dispositivos instalados siguen con la copia antigua.
+- El identificador del formato de la IA (`hoja-carga/1`) y la clave de `localStorage` (`hoja-carga`) se quedan como están aunque la app se llame La Hoja: cambiarlos rompería los datos y los textos ya generados.
 - No añadas dependencias ni paso de compilación sin hablarlo. La app es HTML, CSS y módulos ES servidos tal cual.
 
 ## Arquitectura

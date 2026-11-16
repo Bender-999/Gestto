@@ -1,6 +1,6 @@
 {
-  "name": "hoja-carga-estudio",
-  "version": "2.0.0",
+  "name": "la-hoja",
+  "version": "2.0.1",
   "private": true,
   "description": "Planificador de estudio: reparte horas entre asignaturas y proyectos, con temporizador y estadísticas. App web instalable (PWA).",
   "type": "module",

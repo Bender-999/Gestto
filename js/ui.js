@@ -1,4 +1,4 @@
-/* Interfaz de la Hoja de carga de estudio.
+/* Interfaz de La Hoja.
    Todo se pinta con render() a partir del estado S y se maneja con delegación de eventos:
    - data-set / data-id / data-val: cambia un valor (ver applySet).
    - data-act, data-view, data-scope, etc.: acciones concretas (ver el manejador de click). */
@@ -380,7 +380,7 @@ function docs() {
   return o;
 }
 function setStatus(t) {$('status').textContent = t}
-const LS = 'hoja-carga';
+const LS = 'hoja-carga'; /* Clave de los datos en localStorage: no cambiarla aunque cambie el nombre de la app. */
 function lsGet() {try {return JSON.parse(localStorage.getItem(LS) || localStorage.getItem('hoja') || 'null')} catch (e) {return null}}
 function lsSet() {try {localStorage.setItem(LS, JSON.stringify(S))} catch (e) {}}
 function touch() {render(); dirty = true; clearTimeout(timer); timer = setTimeout(flush, 600)}

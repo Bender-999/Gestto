@@ -1,4 +1,4 @@
-/* Lógica de la Hoja de carga de estudio: lectura del texto de la IA, reparto del tiempo,
+/* Lógica de La Hoja: lectura del texto de la IA, reparto del tiempo,
    objetivos, sesión con temporizador y estadísticas. Sin DOM: se puede probar con node --test. */
 const LV={1:'Alta',2:'Media',3:'Baja',0:'Fuera'},LVIN={alta:1,media:2,baja:3,fuera:0};
 const MIN_CHUNK=15,FAR='9999-12-31',FORMATO='hoja-carga/1';

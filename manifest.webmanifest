@@ -1,6 +1,6 @@
 {
-  "name": "Hoja de carga de estudio",
-  "short_name": "Hoja de carga",
+  "name": "La Hoja",
+  "short_name": "La Hoja",
   "description": "Planificador de estudio con reparto de horas, temporizador y estadísticas.",
   "lang": "es",
   "start_url": "./",

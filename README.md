@@ -1,6 +1,6 @@
 # Gestto
 
-Herramienta de gestión de tiempo para estudios y proyectos. La app se llama **Hoja de carga de estudio**.
+Herramienta de gestión de tiempo para estudios y proyectos. La app se llama **La Hoja**.
 
 Planificador de estudio personal. Una IA estima las tareas de cada asignatura o proyecto, tú ajustas prioridades y tiempos, y la hoja reparte tus horas entre los días que tienes. Incluye un temporizador de sesión (hacer, revisar, descanso, pausa) y estadísticas de lo que estudias de verdad frente a lo previsto.
 

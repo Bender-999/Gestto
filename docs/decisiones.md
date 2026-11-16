@@ -29,4 +29,5 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Estética | Se mantienen la paleta y las tipografías. Todo redondeado: «tan cuadrado se ve antiguo» |
 | Controles | Nada de desplegables, campos numéricos ni selectores de hora nativos. Se usan botones − y +, fichas, bloques, interruptores, un calendario y un desplegable propios |
 | Horario | Varias franjas por día. Doble clic en un hueco añade una franja, arrastrar la mueve y los bordes la alargan. Doble clic sobre una franja abre sus horas de estudio en hh:mm, donde también se borra. Sin botones de inicio y fin |
+| Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |

@@ -6,7 +6,7 @@ Todo cabe en el plan gratuito de Firebase (Spark) para un solo usuario.
 
 ## 1. Crear el proyecto de Firebase
 
-1. Entra en [console.firebase.google.com](https://console.firebase.google.com) con tu cuenta de Google y crea un proyecto (por ejemplo, `hoja-carga`). Google Analytics no hace falta.
+1. Entra en [console.firebase.google.com](https://console.firebase.google.com) con tu cuenta de Google y crea un proyecto (por ejemplo, `la-hoja`). Google Analytics no hace falta.
 2. **Authentication › Método de inicio de sesión**: activa **Google**.
 3. **Firestore Database › Crear base de datos**: elige el modo de producción y una ubicación en Europa (`europe-southwest1`, que es Madrid, o `eur3`). La ubicación no se puede cambiar después.
 4. **Configuración del proyecto › General › Tus apps**: añade una app **Web** (icono `</>`), con el alias que quieras. No hace falta marcar Hosting en este paso.
@@ -15,9 +15,9 @@ Todo cabe en el plan gratuito de Firebase (Spark) para un solo usuario.
 ```js
 export const firebaseConfig = {
   apiKey: '...',
-  authDomain: 'hoja-carga.firebaseapp.com',
-  projectId: 'hoja-carga',
-  storageBucket: 'hoja-carga.appspot.com',
+  authDomain: 'la-hoja.firebaseapp.com',
+  projectId: 'la-hoja',
+  storageBucket: 'la-hoja.appspot.com',
   messagingSenderId: '...',
   appId: '...'
 };
@@ -35,7 +35,7 @@ npx firebase-tools use --add          # elige el proyecto y ponle el alias "defa
 npx firebase-tools deploy             # sube la app (Hosting) y las reglas de Firestore
 ```
 
-Al terminar te da la dirección, del tipo `https://hoja-carga.web.app`. Para siguientes versiones basta con `npm run deploy`. **Antes de cada publicación, sube `VERSION` en `sw.js`.**
+Al terminar te da la dirección, del tipo `https://la-hoja.web.app`. Para siguientes versiones basta con `npm run deploy`. **Antes de cada publicación, sube `VERSION` en `sw.js`.**
 
 ## 3. Instalarla
 
@@ -49,8 +49,8 @@ En cada dispositivo, pulsa **Entrar con Google** la primera vez. A partir de ah�
 
 Safari bloquea el almacenamiento de terceros, y el inicio de sesión por redirección necesita que la app y el dominio de autenticación sean el mismo. Si al volver de Google sigue pidiendo entrar:
 
-1. En `js/firebase-config.js`, cambia `authDomain` por el dominio donde está publicada la app (por ejemplo, `hoja-carga.web.app`).
-2. En [Google Cloud › APIs y servicios › Credenciales](https://console.cloud.google.com/apis/credentials), abre el cliente OAuth web que creó Firebase y añade en «URI de redireccionamiento autorizados» `https://hoja-carga.web.app/__/auth/handler`.
+1. En `js/firebase-config.js`, cambia `authDomain` por el dominio donde está publicada la app (por ejemplo, `la-hoja.web.app`).
+2. En [Google Cloud › APIs y servicios › Credenciales](https://console.cloud.google.com/apis/credentials), abre el cliente OAuth web que creó Firebase y añade en «URI de redireccionamiento autorizados» `https://la-hoja.web.app/__/auth/handler`.
 3. Comprueba que el dominio aparece en Firebase › Authentication › Configuración › Dominios autorizados.
 4. Publica de nuevo.
 
