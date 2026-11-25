@@ -38,7 +38,17 @@ let store = {kind: 'local'};
 
 /* ---------- Pintado ---------- */
 function render() {
-  const a = document.activeElement && document.activeElement.id, al = allocate(S, TODAY), ob = objectives(S, al), none = !S.app.order.length;
+  const a = document.activeElement && document.activeElement.id, al = allocate(S, TODAY);
+  document.body.classList.toggle('simple', !!uiPref.simple);
+  $('modeSwitch').innerHTML = uiPref.simple ? '<button type="button" class="btn ghost sm" data-simple="off">Versión completa</button>' : '<button type="button" class="btn ghost sm" data-simple="on">Usar la versión simplificada en este dispositivo</button>';
+  if (uiPref.simple) {
+    ['headblock', 'chart', 'scopes', 'tabs'].forEach(id => {$(id).hidden = true});
+    $('overlay').innerHTML = '';
+    renderSimple(al); renderAccount(); tick();
+    if (a && $(a) && $(a) !== document.activeElement) $(a).focus();
+    return;
+  }
+  const ob = objectives(S, al), none = !S.app.order.length;
   if (scope !== 'general' && scope !== 'nueva' && !S.subs[scope]) scope = 'general';
   const add = scope === 'nueva', foc = view === 'sesion' && !add;
   renderScopes();
@@ -156,7 +166,7 @@ function doneDayOptions(d) {
 }
 /* Casilla de selección: estado 'on', 'part' (algunas) u ''. */
 const selBox = (st, attrs, label) => `<button type="button" class="dv-sel ${st}" role="checkbox" aria-checked="${st === 'on' ? 'true' : st === 'part' ? 'mixed' : 'false'}" aria-label="${esc(label)}" ${attrs}>${st === 'part' ? '<i></i>' : CHECK}</button>`;
-function dayViewModal(al) {
+function dayViewModal(al, page) {
   const d = dayView; if (!d) return '';
   const x = S.app.days.find(y => y.d === d), rows = al.plan[d] || [], past = d < TODAY, closed = !!S.app.closed[d];
   const tot = rows.reduce((a, r) => a + r.m, 0), free = x && !past && !closed ? Math.max(0, al.rem[d] || 0) : 0;
@@ -215,6 +225,7 @@ function dayViewModal(al) {
     bar = `<div class="dv-bar">${ask}<div class="dv-bar-r"><b>${n ? n + (n === 1 ? ' seleccionada' : ' seleccionadas') : 'Toca tareas o cabeceras para seleccionarlas'}</b>
       <div class="row-btns">${n ? `<button type="button" class="btn sm" data-dvbulk="done" aria-expanded="${selAsk === 'done'}">Marcar hechas</button><button type="button" class="btn sm alt" data-dvbulk="move" aria-expanded="${selAsk === 'move'}">Mover</button>${anyPin ? '<button type="button" class="btn ghost sm" data-dvbulk="unpin">Soltar</button>' : ''}` : `<button type="button" class="btn ghost sm" data-dvbulk="all">Todas</button>`}<button type="button" class="btn ghost sm" data-dvbulk="exit">Cancelar</button></div></div></div>`;
   }
+  if (page) return {list, bar, rows, x, past, closed, tot, free, slots, open};
   const prev = L.addDays(d, -1), next = L.addDays(d, 1);
   return `<div class="modal-bg" data-modalbg="dv"><div class="modal dv ${selMode ? 'selecting' : ''}" role="dialog" aria-modal="true" aria-label="${esc(dayLabel(d, {weekday: 'long', month: 'long'}))}">
     <div class="modal-h"><button type="button" class="icon round" data-dvgo="${prev}" aria-label="Día anterior">‹</button><h3>${dayLabel(d, {weekday: 'long', month: 'long'})}${d === TODAY ? ' · hoy' : ''}</h3><button type="button" class="icon round" data-dvgo="${next}" aria-label="Día siguiente">›</button><button type="button" class="icon round" data-dvclose="1" aria-label="Cerrar">×</button></div>
@@ -222,6 +233,83 @@ function dayViewModal(al) {
     ${rows.length ? `<ul class="dv-list" data-dvday="${d}">${list}</ul>${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para cambiar el orden. «Mover» la fija en otro día. Mantén pulsada una tarea o usa «Seleccionar» para elegir varias.</p>'}` : `<div class="empty">${x ? 'No hay tareas este día.' : past ? 'Día pasado sin estudio.' : 'Añádelo para que el plan le reparta tareas.'}</div>`}
     ${bar || `<div class="modal-f">${free ? `<span class="sub">Libre: ${fmt(free)}</span>` : '<span></span>'}<div class="row-btns">${x && !past ? `<button type="button" class="btn ghost sm" data-dvslots="${d}">Editar franjas</button>` : ''}${!x && !past ? `<button type="button" class="btn sm" data-dvadd="${d}">Añadir este día</button>` : ''}<button type="button" class="btn sm" data-dvclose="1">Listo</button></div></div>`}
   </div></div>`;
+}
+
+/* ---------- Versión simplificada (móvil) ----------
+   Se activa por dispositivo (uiPref.simple). Tres pantallas: el día (sp = 'dia'), la sesión ('sesion')
+   y el resumen de un día ('resumen'). El día usa dayView y reutiliza la lista de la ventana del día. */
+let sp = 'dia', spSum = TODAY, spMore = false, spAnim = '';
+function spGo(d, dir) {dayView = d; spAnim = dir > 0 ? 'from-r' : 'from-l'; exitSel(); doneAsk = moveAsk = null; pick = null; render()}
+function renderSimple(al) {
+  if (S.app.run && sp === 'dia' && !dayView) sp = 'sesion';
+  if (!dayView) dayView = TODAY;
+  if (sp === 'sesion' && S.app.run) return renderSimpleSession(al);
+  if (sp === 'sesion' && !S.app.run) {sp = S.app.closed[TODAY] && S.app.lastDay === TODAY ? 'resumen' : 'dia'; spSum = TODAY}
+  if (sp === 'resumen') return renderSimpleSummary();
+  renderSimpleDay(al);
+}
+function renderSimpleDay(al) {
+  const d = dayView, p = dayViewModal(al, true), isToday = d === TODAY, r = S.app.run;
+  const done = p.rows.filter(x => x.done), doneM = done.reduce((a, x) => a + x.m, 0);
+  const pct = p.tot ? Math.round(100 * doneM / p.tot) : 0, dt = new Date(d + 'T00:00:00Z');
+  const wd = dt.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'long'});
+  let cta = '';
+  if (r) cta = `<button type="button" class="sp-cta" data-sp="sesion">Volver a la sesión</button>`;
+  else if (isToday && !p.closed && p.x) cta = `<button type="button" class="sp-cta" data-act="go">Empezar sesión</button>`;
+  else if (isToday && !p.x) cta = `<button type="button" class="sp-cta" data-act="go">Empezar sesión</button><p class="sub sp-note">Hoy no está entre tus días. Al empezar se añade con tu horario.</p>`;
+  else if (isToday && p.closed) cta = `<button type="button" class="sp-cta alt" data-sp="resumen" data-day="${d}">Ver el resumen de hoy</button><button type="button" class="btn ghost sp-wide" data-act="go">Seguir estudiando hoy</button>`;
+  else if (d < TODAY) cta = `<button type="button" class="sp-cta alt" data-sp="resumen" data-day="${d}">Ver el resumen del día</button>`;
+  const list = p.rows.length ? `<div class="sp-listh"><b>Tareas</b>${p.open.length && !selMode ? '<button type="button" class="btn ghost sm" data-dvbulk="enter">Seleccionar</button>' : ''}</div><ul class="dv-list" data-dvday="${d}">${p.list}</ul>${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para ordenarlas. Mantén pulsada una tarea para elegir varias.</p>'}`
+    : `<div class="empty">${p.x ? 'No hay tareas este día.' : d < TODAY ? 'Día pasado sin estudio.' : 'No es uno de tus días de estudio.'}</div>${!p.x && d >= TODAY ? `<button type="button" class="btn ghost sp-wide" data-dvadd="${d}">Añadir este día</button>` : ''}`;
+  $('main').innerHTML = `<div class="sp ${spAnim}" data-swipe="1">
+    <div class="sp-head"><button type="button" class="icon round" data-spgo="-1" aria-label="Día anterior">‹</button>
+      <div class="sp-date"><b>${isToday ? 'Hoy' : wd[0].toUpperCase() + wd.slice(1)}</b><span>${dayLabel(d, {weekday: isToday ? 'long' : undefined, month: 'long'})}</span></div>
+      <button type="button" class="icon round" data-spgo="1" aria-label="Día siguiente">›</button></div>
+    ${isToday ? '' : '<div class="sp-back"><button type="button" class="btn ghost sm" data-spgo="0">Volver a hoy</button></div>'}
+    ${p.x ? `<div class="sp-sum"><div><b>${fmt(p.tot)}</b><span>de estudio${p.slots ? ' · ' + p.slots : ''}</span></div><div class="sp-prog" role="img" aria-label="${pct} % hecho"><i style="width:${pct}%"></i></div><small>${done.length} de ${p.rows.length} ${p.rows.length === 1 ? 'tarea hecha' : 'tareas hechas'}${p.free ? ' · libre ' + fmt(p.free) : ''}</small></div>` : ''}
+    ${cta}${list}${p.bar}</div>`;
+  spAnim = '';
+}
+function renderSimpleSession(al) {
+  const r = S.app.run, now = Date.now(), c = L.clock(S, now, TODAY), it = c.it, ph = r.phase, brk = ph === 'break', pa = ph === 'pause';
+  const base = pa ? r.pb.phase : (brk ? r.back : ph), toRev = base === 'do' && it && it.rev;
+  const B = (act, label, cls = '') => `<button type="button" class="sp-btn ${cls}" data-act="${act}">${label}</button>`;
+  let acts;
+  if (pa) acts = B('unpause', 'Reanudar', 'main') + B('end', 'Acabar día', 'ghost');
+  else if (parar) acts = B('pause', 'Pausa', 'main') + B('end', 'Acabar día', 'alt') + B('noparar', 'Cancelar', 'ghost');
+  else if (ph === 'free') acts = `<button type="button" class="sp-btn main" data-showextra="1">Tarea fuera del plan</button>` + B('parar', 'Parar', 'ghost');
+  else if (brk) acts = B('resume', 'Reanudar', 'main') + B('parar', 'Parar', 'ghost');
+  else acts = B('next', toRev ? 'Hecha: a revisar' : ph === 'review' ? 'Revisión hecha' : 'Tarea hecha', 'main') + B('break', 'Descanso', 'alt') + B('parar', 'Parar', 'ghost');
+  const pend = al.pend.filter(p => p.it.key !== r.key).slice(0, 80), nxt = L.nextKey(S, r.day, r.sid, r.key);
+  const stale = r.day < TODAY ? `<div class="banner"><span>Esta sesión sigue abierta desde el ${dayLabel(r.day)}.</span><div class="row-btns"><button class="btn alt sm" data-act="carry">Seguir hoy</button><button class="btn alt sm" data-act="discard">Cerrarla sin contar el último tramo</button></div></div>` : '';
+  const more = spMore ? `<div class="sp-more">
+      ${it ? `<button type="button" class="btn ghost" data-showextra="1">Tarea fuera del plan</button><button type="button" class="btn ghost" data-act="minus5">Quitar 5 min a este tramo</button>` : ''}
+      ${it && pend.length ? `<div class="field wide"><span class="lbl">Cambiar de tarea</span>${menu({key: 'switchTask', value: '', open: menuOpen === 'switchTask|', placeholder: 'Elige otra tarea', label: 'Cambiar de tarea', options: pend.map(p => ({v: p.it.key, label: p.it.name, sub: p.it.det, sw: colorOf(p.it.sid), group: p.it.subName}))})}</div>` : ''}</div>` : '';
+  $('main').innerHTML = stale + `<div class="sp-ses" data-phase="${ph === 'free' ? '' : ph}">
+    <div class="sp-ses-top"><button type="button" class="btn ghost sm" data-sp="dia">‹ Día</button><span class="state"><i></i>${STATE[ph]}</span><button type="button" class="btn ghost sm" data-spmore="1" aria-expanded="${spMore}">Más</button></div>
+    ${more}
+    <div class="sp-ses-main"><div class="sp-ses-sub">${it ? sw(it.sid) + esc(it.subName) : ''}</div><h2>${it ? esc(it.name) : 'Has acabado lo previsto'}</h2>
+    <div class="big" id="bigT"></div><div class="bigsub" id="bigS"></div></div>
+    <div class="sp-acts">${acts}</div>
+    <div class="sp-today"><span>Hoy <b id="miStudy"></b></span><span>Descanso <b id="miBreak"></b></span></div>
+    ${nxt ? `<p class="sub sp-next">Después: ${esc(nxt.subName)} · ${esc(nxt.name)}</p>` : ''}
+    ${showExtra || !it ? extraForm() : ''}</div>`;
+}
+function renderSimpleSummary() {
+  const d = spSum || TODAY, o = L.dayStats(S, d, Date.now()), pct = o.plan ? Math.round(100 * o.study / o.plan) : 0;
+  const subs = Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]);
+  const bar = subs.map(id => `<i style="width:${o.study ? 100 * o.bySub[id] / o.study : 0}%;background:${colorOf(id)}"></i>`).join('');
+  const leg = subs.map(id => `<li>${sw(id)}<span>${esc(S.subs[id] ? S.subs[id].nombre : id)}</span><b class="num">${fmt(o.bySub[id])}</b></li>`).join('');
+  const dev = t => {if (!t.real || !t.est) return ''; const v = Math.round(100 * (t.real / t.est - 1)); return `<em class="${v > 0 ? 'neg' : 'pos'}">${v >= 0 ? '+' : '−'}${Math.abs(v)} %</em>`};
+  const tasks = o.tasks.map(t => `<li>${sw(t.sid)}<span>${esc(t.name)}<small>${esc(t.subName)}</small></span><b class="num">${t.real ? fmt(t.real) : '—'}<small>de ${fmt(t.est)}</small></b>${dev(t)}</li>`).join('');
+  $('main').innerHTML = `<div class="sp sp-res">
+    <div class="sp-head"><button type="button" class="btn ghost sm" data-sp="dia">‹ Día</button><div class="sp-date"><b>Resumen</b><span>${dayLabel(d, {weekday: 'long', month: 'long'})}</span></div><span></span></div>
+    <div class="sp-hero"><b>${fmt(o.study)}</b><span>de estudio${o.plan ? ` de ${fmt(o.plan)} previstas` : ''}</span>${o.plan ? `<div class="sp-prog big"><i style="width:${Math.min(100, pct)}%"></i></div><small>${pct} % de lo previsto</small>` : ''}</div>
+    <div class="sp-tiles"><div><b>${fmt(o.brk)}</b><small>de descanso${o.nBreaks ? ` en ${o.nBreaks} ${o.nBreaks === 1 ? 'parada' : 'paradas'}` : ''}</small></div><div><b>${fmt(o.maxStint)}</b><small>bloque más largo sin parar</small></div><div><b>${fmt(o.paus)}</b><small>en pausa, no cuenta</small></div><div><b>${o.tasks.length}</b><small>${o.tasks.length === 1 ? 'tarea hecha' : 'tareas hechas'}</small></div></div>
+    ${subs.length ? `<section class="card"><h2>Por asignatura</h2><div class="sp-stack">${bar}</div><ul class="sp-leg">${leg}</ul></section>` : ''}
+    ${o.tasks.length ? `<section class="card"><h2>Tareas hechas</h2><ul class="sp-tasks">${tasks}</ul></section>` : ''}
+    ${!o.study && !o.tasks.length ? '<div class="empty">Ese día no hay estudio registrado.</div>' : ''}
+    ${d === TODAY ? '<button type="button" class="btn ghost sp-wide" data-act="go">Seguir estudiando hoy</button>' : ''}</div>`;
 }
 
 function renderWelcome() {
@@ -486,7 +574,7 @@ function renderSession(al) {
 function tick() {
   const r = S.app.run, now = Date.now(), b = $('startBtn');
   b.textContent = r ? 'Volver a la sesión' : 'Empezar día'; b.hidden = view === 'sesion';
-  if (!r || view !== 'sesion' || !$('bigT')) return;
+  if (!r || !$('bigT')) return;
   const c = L.clock(S, now, TODAY); let big = 0, sub = '', over = false;
   const lib = c.it && c.it.libre, base = r.phase === 'pause' ? r.pb.phase : r.phase;
   if (r.phase === 'pause') {big = base === 'review' ? c.rev : base === 'break' ? c.cur : lib ? c.doM : c.left; sub = 'En pausa desde hace ' + L.fmtClock(c.cur) + '. No cuenta como estudio ni como descanso'}
@@ -495,7 +583,8 @@ function tick() {
   else if (r.phase === 'break') {big = c.cur; sub = 'Estudio y tarea parados'}
   $('bigT').textContent = L.fmtClock(big); $('bigS').innerHTML = sub.startsWith('<') ? sub : esc(sub);
   const day = S.app.days.find(x => x.d === r.day);
-  $('miStudy').textContent = L.fmtClock(c.sDay) + (day ? ' de ' + fmt(day.h * 60) : ''); $('miBreak').textContent = L.fmtClock(c.bDay); $('miTask').textContent = L.fmtClock(c.doM) + ' + ' + L.fmtClock(c.rev) + ' rev.';
+  const put = (id, t) => {const el = $(id); if (el) el.textContent = t};
+  put('miStudy', L.fmtClock(c.sDay) + (day ? ' de ' + fmt(day.h * 60) : '')); put('miBreak', L.fmtClock(c.bDay)); put('miTask', L.fmtClock(c.doM) + ' + ' + L.fmtClock(c.rev) + ' rev.');
 }
 
 /* ---------- Datos ---------- */
@@ -654,6 +743,10 @@ document.addEventListener('click', e => {
   if (d.slot === 'apply') {applySlotEdit(); return}
   if (d.slot === 'cancel') {slotEdit = null; render(); return}
   if (d.slot === 'del') {const sl = getSlots(slotEdit.sk).filter((_, k) => k !== slotEdit.j); setSlots(slotEdit.sk, sl); return}
+  if (d.simple) {uiPref.simple = d.simple === 'on'; saveUi(); exitSel(); doneAsk = moveAsk = null; dayView = uiPref.simple ? TODAY : null; sp = S.app.run ? 'sesion' : 'dia'; scrollTo(0, 0); render(); return}
+  if (d.sp) {sp = d.sp; if (d.day) spSum = d.day; spMore = false; showExtra = false; parar = false; if (sp === 'dia' && !dayView) dayView = TODAY; scrollTo(0, 0); render(); return}
+  if (d.spgo !== undefined) {const k = +d.spgo; spGo(k === 0 ? TODAY : L.addDays(dayView || TODAY, k), k === 0 ? (dayView > TODAY ? -1 : 1) : k); return}
+  if (d.spmore) {spMore = !spMore; render(); return}
   if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
   if (d.chnav !== undefined) {const k = +d.chnav; if (k === 0) {chartAnim = chartStart > TODAY ? 'from-l' : 'from-r'; chartStart = TODAY} else {chartStart = L.addDays(chartStart, k * chartN); chartAnim = k > 0 ? 'from-r' : 'from-l'} render(); return}
   if (d.dayview) {dayView = d.dayview; doneAsk = null; moveAsk = null; pick = null; exitSel(); render(); return}
@@ -714,17 +807,17 @@ document.addEventListener('click', e => {
   else if (d.del === '2') {const id = scope; delete S.subs[id]; S.app.order = S.app.order.filter(x => x !== id); if (S.app.run && S.app.run.sid === id) S.app.run = null; scope = 'general'; confirmDel = false; commit()}
   else if (d.act) {
     const now = Date.now();
-    if (d.act === 'go') {if (!S.app.run) {L.startDay(S, TODAY, now); wake()} view = 'sesion'}
+    if (d.act === 'go') {if (!S.app.run) {L.startDay(S, TODAY, now); wake()} view = 'sesion'; sp = 'sesion'; spMore = false}
     else if (d.act === 'next') {L.nextStep(S, now); wake()}
     else if (d.act === 'break') L.goBreak(S, now);
     else if (d.act === 'resume') {L.resumeWork(S, now); wake()}
-    else if (d.act === 'end') {L.endDay(S, now); parar = false}
+    else if (d.act === 'end') {const day = S.app.run && S.app.run.day; L.endDay(S, now); parar = false; sp = 'resumen'; spSum = day || TODAY}
     else if (d.act === 'parar') parar = true;
     else if (d.act === 'noparar') parar = false;
     else if (d.act === 'pause') {L.goPause(S, now); parar = false}
     else if (d.act === 'unpause') {L.unpause(S, now); wake()}
     else if (d.act === 'carry') L.carryOver(S, TODAY, now);
-    else if (d.act === 'discard') L.discardRun(S);
+    else if (d.act === 'discard') {L.discardRun(S); sp = 'resumen'; spSum = TODAY}
     else if (d.act === 'minus5') L.trimRun(S, 5, now);
     commit();
   }
@@ -804,9 +897,9 @@ document.addEventListener('pointerdown', e => {
   try {h.setPointerCapture(e.pointerId)} catch (_) {}
   const scroll = () => {
     const g = dvDrag; if (!g) return;
-    const b = g.box.getBoundingClientRect(), edge = 56;
-    if (g.y < b.top + edge) g.box.scrollTop -= Math.ceil((b.top + edge - g.y) / 6);
-    else if (g.y > b.bottom - edge) g.box.scrollTop += Math.ceil((g.y - b.bottom + edge) / 6);
+    const b = g.box ? g.box.getBoundingClientRect() : {top: 0, bottom: innerHeight}, edge = 56, by = v => g.box ? (g.box.scrollTop += v) : scrollBy(0, v);
+    if (g.y < b.top + edge) by(-Math.ceil((b.top + edge - g.y) / 6));
+    else if (g.y > b.bottom - edge) by(Math.ceil((g.y - b.bottom + edge) / 6));
     placeDv(g); g.raf = requestAnimationFrame(scroll);
   };
   dvDrag.raf = requestAnimationFrame(scroll);
@@ -852,6 +945,17 @@ const dvEnd = e => {
 };
 document.addEventListener('pointerup', dvEnd);
 document.addEventListener('pointercancel', dvEnd);
+/* Versión simplificada: deslizar a izquierda o derecha cambia de día. */
+let swipe = null;
+document.addEventListener('touchstart', e => {
+  if (!uiPref.simple || sp !== 'dia' || dvDrag || selMode || e.touches.length !== 1 || !e.target.closest('[data-swipe]')) {swipe = null; return}
+  const t = e.touches[0]; swipe = {x: t.clientX, y: t.clientY, t: Date.now()};
+}, {passive: true});
+document.addEventListener('touchend', e => {
+  const g = swipe; swipe = null; if (!g || dvDrag) return;
+  const t = e.changedTouches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
+  if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && Date.now() - g.t < 700) spGo(L.addDays(dayView || TODAY, dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+}, {passive: true});
 setInterval(tick, 500);
 document.addEventListener('visibilitychange', () => {if (!document.hidden) {tick(); wake()}});
 
@@ -865,12 +969,12 @@ export async function start() {
   store = await openStore({onError: () => setStatus('No se ha podido subir un cambio a la nube. Sigue guardado en este dispositivo.')});
   if (!store.db) {
     const l = lsGet(); if (l && l.app) S = loadState(l);
-    if (S.app.run) view = 'sesion';
+    if (S.app.run) {view = 'sesion'; sp = 'sesion'}
     render(); setStatus(store.warn || (store.needLogin ? 'Sin entrar: se guarda solo en este navegador.' : 'Se guarda solo en este navegador.')); return;
   }
   db = store.db; let first = true;
   const slow = setTimeout(() => setStatus('Aún no llega lo guardado. Puede estar desactualizado.'), 10000);
-  const apply = () => {if (first && S.app.run) view = 'sesion'; render()};
+  const apply = () => {if (first && S.app.run) {view = 'sesion'; sp = 'sesion'} render()};
   const busy = m => dirty || saving || m.hasPendingWrites;
   db.doc('app/estado').onSnapshot(s => {
     if (!s.metadata.fromCache) {clearTimeout(slow); if (/^(Conectando|Aún)/.test($('status').textContent)) setStatus(store.kind === 'firebase' ? 'Sincronizado.' : 'Guardado.')}

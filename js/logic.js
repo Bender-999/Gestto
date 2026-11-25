@@ -488,6 +488,25 @@ function fmtClock(ms){
   return (ms<0&&a>0?'−':'')+(h?h+':'+p(m):p(m))+':'+p(x);
 }
 
+/* Resumen de un día: estudio real (hacer + revisar), previsto, descansos, pausas, bloque más
+   largo sin parar, reparto por asignatura y tareas hechas ese día con lo que tardaste. */
+function dayStats(S,d,now){
+  const c={log:{},app:{run:S.app.run&&{...S.app.run}}};
+  for(const k of Object.keys(S.log))c.log[k]=[...S.log[k]];
+  if(c.app.run&&now)closeSeg(c,now);
+  const segs=allSegs(c).filter(x=>x.d===d).sort((a,b)=>a.s-b.s),m=x=>(x.e-x.s)/60000;
+  let study=0,brk=0,paus=0,nBreaks=0,cur=0,maxStint=0;const bySub={},byKey={};
+  for(const x of segs){
+    if(x.t==='p'){paus+=m(x);maxStint=Math.max(maxStint,cur);cur=0;continue}
+    if(x.t==='b'){brk+=m(x);nBreaks++;maxStint=Math.max(maxStint,cur);cur=0;continue}
+    study+=m(x);cur+=m(x);bySub[x.a]=(bySub[x.a]||0)+m(x);byKey[x.k]=(byKey[x.k]||0)+m(x);
+  }
+  maxStint=Math.max(maxStint,cur);
+  const day=S.app.days.find(y=>y.d===d),plan=day?(+day.h||0)*60:0;
+  const tasks=buildItems(S,'0000-00-00').filter(i=>i.done===d).map(i=>({key:i.key,sid:i.sid,name:i.name,subName:i.subName,est:i.m,real:byKey[i.key]||+(S.subs[i.sid].real||{})[i.key]||0}));
+  return {d,plan,study,brk,nBreaks,paus,maxStint,bySub,tasks};
+}
+
 /* Datos */
 function stats(S,today,now,scope){
   const c={log:{},app:{run:S.app.run&&{...S.app.run}}};
@@ -528,4 +547,4 @@ function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};

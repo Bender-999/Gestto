@@ -117,3 +117,29 @@ test('reimportar una asignatura conserva las fijaciones', () => {
   L.applySub(S, L.parseText(JSON.stringify(SAMPLE)).subs[0]);
   assert.equal(S.subs.estructuras.pin['estructuras/tor1'], '2026-11-20');
 });
+
+test('dayStats resume el día: estudio, descansos, bloque más largo y tareas', () => {
+  const S = L.newState();
+  L.parseText(JSON.stringify(SAMPLE)).subs.forEach(s => L.applySub(S, s));
+  const d = '2026-11-16', t0 = Date.UTC(2026, 10, 16, 15), min = 60000;
+  S.app.days = [{d, h: 4}];
+  S.log['2026-11'] = [
+    {a: 'estructuras', d, k: 'estructuras/tor1', s: t0, e: t0 + 12 * min, t: 'd'},
+    {a: 'estructuras', d, k: 'estructuras/tor1', s: t0 + 12 * min, e: t0 + 15 * min, t: 'r'},
+    {a: 'estructuras', d, k: 'estructuras/tor1', s: t0 + 15 * min, e: t0 + 20 * min, t: 'b'},
+    {a: 'estructuras', d, k: 'estructuras/tor2', s: t0 + 20 * min, e: t0 + 45 * min, t: 'd'},
+    {a: 'estructuras', d, k: 'estructuras/tor2', s: t0 + 45 * min, e: t0 + 50 * min, t: 'p'}
+  ];
+  S.subs.estructuras.done['estructuras/tor1'] = d;
+  const o = L.dayStats(S, d, t0 + 60 * min);
+  assert.equal(o.plan, 240);
+  assert.equal(Math.round(o.study), 40);
+  assert.equal(Math.round(o.brk), 5);
+  assert.equal(o.nBreaks, 1);
+  assert.equal(Math.round(o.paus), 5);
+  assert.equal(Math.round(o.maxStint), 25);
+  assert.equal(Math.round(o.bySub.estructuras), 40);
+  assert.equal(o.tasks.length, 1);
+  assert.equal(Math.round(o.tasks[0].real), 15);
+  assert.equal(o.tasks[0].est, 10);
+});

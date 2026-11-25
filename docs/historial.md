@@ -11,6 +11,11 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 5. Horario habitual, mínimos diarios, bloques sin intercalar, pausa, tareas manuales y asignaturas en espera.
 6. Gráfico de cabecera con una columna por día y el reparto por asignatura.
 
+## Versión 2.3 (25 de noviembre de 2026)
+
+- Versión simplificada para el móvil, activable por dispositivo: un día por página con botón grande para empezar, sesión mínima con menú «Más» y resumen del día al acabar.
+- `dayStats` en la lógica, con prueba.
+
 ## Versión 2.2 (25 de noviembre de 2026)
 
 - Gráfico de días nuevo: 3, 7, 10 o 14 días, botones con animación, meses separados, hoy y fines de semana visibles, hueco libre rayado y nombres en los tramos.
