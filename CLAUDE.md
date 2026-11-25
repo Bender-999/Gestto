@@ -11,7 +11,7 @@ La Hoja (antes «Hoja de carga de estudio») es un planificador personal de un �
 - **Pregunta antes de construir** si algo no está claro o toca una decisión de `docs/decisiones.md`. El usuario prefiere responder preguntas antes que rehacer trabajo.
 - Prueba los cambios: `npm test` para la lógica y `npm start` para verla en `http://localhost:5173`.
 - **Subir a `main` publica la app** en https://la-hoja-15712.web.app (GitHub Actions + Firebase Hosting). La versión de `sw.js` se pone sola en cada publicación. Trabaja en una rama y abre una solicitud de cambios: tendrá su propia dirección de pruebas. Detalles en `docs/despliegue.md`.
-- `firestore.rules`, `firestore.indexes.json` y `functions/` no se publican solos: tras cambiarlos, `npx firebase-tools deploy --only firestore,functions`.
+- `firestore.rules` no se publica sola: tras cambiarla, `npx firebase-tools deploy --only firestore:rules`.
 - El identificador del formato de la IA (`hoja-carga/1`) y la clave de `localStorage` (`hoja-carga`) se quedan como están aunque la app se llame La Hoja: cambiarlos rompería los datos y los textos ya generados.
 - No añadas dependencias ni paso de compilación sin hablarlo. La app es HTML, CSS y módulos ES servidos tal cual.
 
@@ -34,8 +34,6 @@ Estado en memoria: `S = {app, subs, log}`. Se guarda en documentos:
 | `app/estado` | `S.app`: días, horario, ajustes, sesión en curso (`run`) |
 | `asig/<id>` | Una asignatura con su progreso (`done`, `real`, `mins`, `lvl`…) |
 | `log/<AAAA-MM>` | `{segs: [...]}`, tramos del temporizador de ese mes |
-| `aviso/cola` | Avisos de la sesión que vienen. La escribe la app y la vacía la función `avisos` |
-| `disp/<id>` | Suscripción a los avisos de un dispositivo |
 
 En Firebase, todo cuelga de `users/<uid>/`.
 
@@ -53,9 +51,8 @@ Versión simplificada (móvil):
 Sesión y avisos:
 - `#runbar` (`renderRunbar` en `ui.js`): barra fija abajo mientras hay `S.app.run` y no se está en la pantalla de sesión. Usa los mismos `data-act`; `data-runbar` abre la sesión. `tick()` actualiza `#rbT`.
 - `alerts(S)` en `logic.js` calcula los avisos que vienen en la fase actual (`BRK_EVERY` 50 min, `BRK_LEN` 10 min). Solo depende del estado.
-- Con Firebase, `syncAlerts()` deja la cola en `aviso/cola` (`{items, next, sent}`; escribe con `merge` para no borrar `sent`). `js/push.js` guarda la suscripción de cada dispositivo en `disp/<id>` (`uiPref.dev`).
-- `functions/index.js` (función `avisos`, cada minuto) manda los avisos con Web Push. Necesita el plan Blaze y el secreto `VAPID_PRIVATE`. No se publica con `main`: `npx firebase-tools deploy --only functions,firestore`. Ver `docs/despliegue.md`.
-- `sw.js` muestra los avisos (`push`) y abre la app al tocarlos.
+- Los avisos salen solo con la app abierta: `tick()` llama a `checkAlerts`, que muestra `showToast` y, si la app no está a la vista y hay permiso (`uiPref.notif`), la notificación del sistema. No hay servidor: se descartó Web Push por necesitar el plan Blaze.
+- `sw.js` abre la app al tocar una notificación.
 
 Horario (versión 2 de `app`):
 - `app.sched[0..6]` (lunes = 0) es `{slots: [{ini: 'HH:MM', fin: 'HH:MM'}]}`.

@@ -14,7 +14,7 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 ## Versión 2.4 (25 de noviembre de 2026)
 
 - Barra de la sesión flotante: en las demás pantallas, con la tarea, el tiempo y los botones Descanso o Reanudar y Hecha. Tocarla abre la sesión.
-- Avisos en la pantalla de bloqueo del iPhone y en Windows: «Toca descanso» a los 50 min seguidos, «Se acabó el descanso» a los 10 min y «Tiempo cumplido» al llegar a lo estimado. Los manda una función programada de Cloud Functions (plan Blaze).
+- Avisos con La Hoja abierta: «Toca descanso» a los 50 min seguidos, «Se acabó el descanso» a los 10 min y «Tiempo cumplido» al llegar a lo estimado. Salen dentro de la app y, en Windows, también como notificación del sistema con la app minimizada.
 - `alerts` en la lógica, con prueba.
 
 ## Versión 2.3 (25 de noviembre de 2026)

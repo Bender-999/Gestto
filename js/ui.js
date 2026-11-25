@@ -6,7 +6,6 @@ import * as L from './logic.js';
 import {SAMPLE} from './sample.js';
 import {PROMPT} from './prompt.js';
 import {openStore} from './storage.js';
-import {pushState, pushOn, pushOff, pushRefresh} from './push.js';
 import {esc, stepper, seg, chips, blocks, toggle, datePick, menu, slotsTrack, axis, bindSlots, parseHM, hm, slotWithHours, longDate} from './controls.js';
 
 const {LV, fmt, dec, nh, hh, toTime, toMin, allocate, objectives, subState, buildItems, dayBlocks, makeDay, slotsHours, studyHours} = L;
@@ -31,7 +30,8 @@ const UIK = 'la-hoja-ui';
 const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
 const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
 if (!uiPref.dev) {uiPref.dev = Math.random().toString(36).slice(2, 10); saveUi()} /* Identifica este dispositivo para los avisos. */
-let pushSt = 'no', pushBusy = false;
+let alertList = [], alertShown = new Set(), toastT = null;
+const LOADED = Date.now();
 let chartN = [3, 7, 10, 14].includes(uiPref.n) ? uiPref.n : (innerWidth < 640 ? 7 : 14), chartStart = TODAY, chartAnim = '';
 let dayView = null, doneAsk = null, moveAsk = null, selMode = false, selAsk = null;
 const sel = new Set();
@@ -43,7 +43,7 @@ let store = {kind: 'local'};
 function render() {
   const a = document.activeElement && document.activeElement.id, al = allocate(S, TODAY);
   document.body.classList.toggle('simple', !!uiPref.simple);
-  $('modeSwitch').innerHTML = (uiPref.simple ? '<button type="button" class="btn ghost sm" data-simple="off">Versión completa</button>' : '<button type="button" class="btn ghost sm" data-simple="on">Usar la versión simplificada en este dispositivo</button>') + pushBlock();
+  $('modeSwitch').innerHTML = (uiPref.simple ? '<button type="button" class="btn ghost sm" data-simple="off">Versión completa</button>' : '<button type="button" class="btn ghost sm" data-simple="on">Usar la versión simplificada en este dispositivo</button>') + notifBlock();
   if (uiPref.simple) {
     ['headblock', 'chart', 'scopes', 'tabs'].forEach(id => {$(id).hidden = true});
     $('overlay').innerHTML = '';
@@ -78,16 +78,37 @@ function renderScopes() {
     `<button class="scope add" data-scope="nueva" aria-pressed="${scope === 'nueva'}">+ Añadir</button>`;
   if (!n) $('scopes').querySelector('[data-scope=general]').hidden = false;
 }
-/* Avisos en este dispositivo: solo con la cuenta de Google (Firebase). */
-function pushBlock() {
-  if (store.kind !== 'firebase' || !store.user || pushSt === 'no') return '';
+/* Avisos de la sesión. Salen mientras La Hoja está abierta: dentro de la app si la estás
+   mirando y, si has dado permiso, como notificación del sistema cuando está detrás o minimizada
+   (útil en Windows; el iPhone para la app en segundo plano y no puede avisar). */
+const canNotify = () => 'Notification' in window && !/iPhone|iPad|iPod/.test(navigator.userAgent);
+function notifBlock() {
+  if (!canNotify()) return '';
+  const p = Notification.permission;
   let x;
-  if (pushBusy) x = '<span>Un momento…</span>';
-  else if (pushSt === 'on') x = '<span>Avisos de la sesión activados</span><button type="button" class="btn ghost sm" data-push="test">Probar</button><button type="button" class="btn ghost sm" data-push="off">Desactivar</button>';
-  else if (pushSt === 'off') x = '<button type="button" class="btn ghost sm" data-push="on">Activar avisos de la sesión en este dispositivo</button>';
-  else if (pushSt === 'denied') x = '<span>Los avisos están bloqueados. Permítelos en los ajustes del sistema para La Hoja.</span>';
-  else if (pushSt === 'install') x = '<span>Para recibir avisos, abre La Hoja desde su icono en la pantalla de inicio.</span>';
+  if (p === 'granted' && uiPref.notif !== false) x = '<span>Avisos del sistema activados con La Hoja abierta</span><button type="button" class="btn ghost sm" data-notif="test">Probar</button><button type="button" class="btn ghost sm" data-notif="off">Desactivar</button>';
+  else if (p === 'denied') x = '<span>Los avisos del sistema están bloqueados para La Hoja en el navegador.</span>';
+  else x = '<button type="button" class="btn ghost sm" data-notif="on">Avisar también con La Hoja minimizada</button>';
   return `<div class="push-opt">${x}</div>`;
+}
+function planAlerts() {alertList = L.alerts(S)}
+function checkAlerts(now) {
+  for (const x of alertList) if (x.at <= now && x.at > LOADED && x.at > now - 10 * 60000 && !alertShown.has(x.id)) {alertShown.add(x.id); fireAlert(x)}
+}
+function fireAlert(x) {
+  const sys = canNotify() && Notification.permission === 'granted' && uiPref.notif !== false;
+  if (sys && (document.hidden || !document.hasFocus())) {
+    const o = {body: x.body, tag: x.kind, icon: 'icons/icon-192.png'};
+    (navigator.serviceWorker ? navigator.serviceWorker.getRegistration() : Promise.resolve(null))
+      .then(r => r ? r.showNotification(x.title, o) : new Notification(x.title, o)).catch(() => {});
+  }
+  showToast(x);
+}
+function showToast(x) {
+  const el = $('toast'); clearTimeout(toastT);
+  el.innerHTML = `<div class="toast" role="status"><div><b>${esc(x.title)}</b><span>${esc(x.body)}</span></div><button type="button" class="btn ghost sm" data-toast="0" aria-label="Cerrar">Vale</button></div>`;
+  el.hidden = false; toastT = setTimeout(() => {el.hidden = true; el.innerHTML = ''}, 15000);
+  try {navigator.vibrate && navigator.vibrate([180, 80, 180])} catch (e) {}
 }
 /* Barra de la sesión: se ve en las demás pantallas mientras hay una sesión abierta. */
 function renderRunbar() {
@@ -95,6 +116,7 @@ function renderRunbar() {
   const show = !!r && !onSes && scope !== 'nueva';
   const enter = show && !document.body.classList.contains('has-runbar');
   document.body.classList.toggle('has-runbar', show);
+  planAlerts();
   if (!show) {el.innerHTML = ''; el.hidden = true; return}
   const it = r.key ? L.findItem(S, r.key, r.day) : null, ph = r.phase, base = ph === 'break' ? r.back : ph;
   const lbl = base === 'review' ? 'Revisada' : it && it.rev ? 'A revisar' : 'Hecha';
@@ -606,6 +628,7 @@ function renderSession(al) {
 }
 function tick() {
   const r = S.app.run, now = Date.now(), b = $('startBtn');
+  checkAlerts(now);
   b.textContent = 'Empezar día'; b.hidden = view === 'sesion' || !!r;
   if (r && $('rbT')) {
     const c = L.clock(S, now, TODAY), lib = c.it && c.it.libre, base = r.phase === 'pause' ? r.pb.phase : r.phase;
@@ -655,14 +678,6 @@ function docs() {
   for (const k of Object.keys(S.log)) o['log/' + k] = {segs: S.log[k]};
   return o;
 }
-/* Cola de avisos para la función «avisos»: solo cambia cuando cambia la sesión. */
-let alertsJ = null;
-function syncAlerts() {
-  if (store.kind !== 'firebase' || !db) return;
-  const items = L.alerts(S).filter(x => x.at > Date.now() - 10 * 60000), j = JSON.stringify(items);
-  if (j === alertsJ) return; alertsJ = j;
-  db.doc('aviso/cola').set({items, next: items.length ? items[0].at : null}, {merge: true});
-}
 function setStatus(t) {$('status').textContent = t}
 const LS = 'hoja-carga'; /* Clave de los datos en localStorage: no cambiarla aunque cambie el nombre de la app. */
 function lsGet() {try {return JSON.parse(localStorage.getItem(LS) || localStorage.getItem('hoja') || 'null')} catch (e) {return null}}
@@ -677,7 +692,6 @@ async function flush() {
     const d = docs();
     for (const p of Object.keys(d)) {const j = JSON.stringify(d[p]); if (saved[p] !== j) {await db.doc(p).set(JSON.parse(j)); saved[p] = j}}
     for (const p of Object.keys(saved)) if (!d[p]) {await db.doc(p).delete(); delete saved[p]}
-    syncAlerts();
     setStatus(store.kind === 'firebase' ? 'Guardado y sincronizado.' : 'Guardado.');
   } catch (e) {lsSet(); setStatus(e && e.code === 'quota_exceeded' ? 'Sin espacio. Elimina asignaturas antiguas.' : 'No se ha podido guardar. Los cambios siguen en esta pantalla.')}
   saving = false;
@@ -795,14 +809,11 @@ document.addEventListener('click', e => {
   if (d.spgo !== undefined) {const k = +d.spgo; spGo(k === 0 ? TODAY : L.addDays(dayView || TODAY, k), k === 0 ? (dayView > TODAY ? -1 : 1) : k); return}
   if (d.spmore) {spMore = !spMore; render(); return}
   if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
-  if (d.push) {
-    if (pushBusy || !db) return;
-    if (d.push === 'test') {const now = Date.now(); db.doc('aviso/prueba').set({items: [{id: 'prueba-' + now, kind: 'prueba', at: now, title: 'Prueba de La Hoja', body: 'Los avisos llegan a este dispositivo.'}], next: now}); setStatus('Aviso de prueba pedido. Llega en un minuto como mucho.'); return}
-    pushBusy = true; render();
-    (d.push === 'on' ? pushOn(db, uiPref.dev) : pushOff(db, uiPref.dev))
-      .then(st => {pushSt = st; if (st === 'on') setStatus('Avisos activados. Pulsa Probar para comprobarlo.')})
-      .catch(e => {console.error(e); setStatus('No se han podido activar los avisos en este dispositivo.')})
-      .finally(() => {pushBusy = false; render()});
+  if (d.toast) {clearTimeout(toastT); $('toast').hidden = true; $('toast').innerHTML = ''; return}
+  if (d.notif) {
+    if (d.notif === 'test') {showToast({title: 'Prueba de La Hoja', body: 'Así te avisará. Minimiza la app para ver la notificación del sistema.'}); setTimeout(() => fireAlert({kind: 'prueba', title: 'Prueba de La Hoja', body: 'Los avisos del sistema funcionan.'}), 4000); return}
+    if (d.notif === 'off') {uiPref.notif = false; saveUi(); render(); return}
+    Notification.requestPermission().then(p => {uiPref.notif = p === 'granted'; saveUi(); render()});
     return;
   }
   if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
@@ -1031,7 +1042,6 @@ export async function start() {
     render(); setStatus(store.warn || (store.needLogin ? 'Sin entrar: se guarda solo en este navegador.' : 'Se guarda solo en este navegador.')); return;
   }
   db = store.db; let first = true;
-  if (store.kind === 'firebase' && store.user) pushState().then(st => {pushSt = st; if (st === 'on') pushRefresh(db, uiPref.dev); render()}).catch(() => {});
   const slow = setTimeout(() => setStatus('Aún no llega lo guardado. Puede estar desactualizado.'), 10000);
   const apply = () => {if (first && S.app.run) {view = 'sesion'; sp = 'sesion'} render()};
   const busy = m => dirty || saving || m.hasPendingWrites;

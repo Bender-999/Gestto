@@ -50,7 +50,7 @@ async function openFirebase(onError) {
     doc: p => {
       const ref = F.doc(db, ...base, ...p.split('/'));
       return {
-        set: (d, o) => {(o ? F.setDoc(ref, d, o) : F.setDoc(ref, d)).catch(fail); return Promise.resolve()},
+        set: d => {F.setDoc(ref, d).catch(fail); return Promise.resolve()},
         delete: () => {F.deleteDoc(ref).catch(fail); return Promise.resolve()},
         onSnapshot: (cb, err) => F.onSnapshot(ref, {includeMetadataChanges: true},
           s => cb({exists: s.exists(), data: () => s.data(), metadata: s.metadata}), err)

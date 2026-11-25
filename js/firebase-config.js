@@ -11,7 +11,3 @@ export const firebaseConfig = {
   messagingSenderId: '1000721125440',
   appId: '1:1000721125440:web:047375f7c2086ec22c4fa5'
 };
-
-/* Clave pública de los avisos (Web Push, VAPID). La privada no está en el repositorio: es un
-   secreto de Cloud Functions (VAPID_PRIVATE). Si se cambia una, hay que cambiar las dos. */
-export const VAPID_PUBLIC = 'BCc9Hq_bd6rMxPaoypMGaf9aZ03OESqFkSfw7Y6F62CGP-bbP89_KJ6OvC3JHMSsXf3TkZxqTevO7fX_9QBhoFk';

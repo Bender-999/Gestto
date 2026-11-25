@@ -3,7 +3,7 @@
 const VERSION = 'la-hoja-v2.1.0';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/base.css', 'css/styles.css',
-  'js/main.js', 'js/ui.js', 'js/logic.js', 'js/controls.js', 'js/storage.js', 'js/push.js', 'js/firebase-config.js', 'js/sample.js', 'js/prompt.js',
+  'js/main.js', 'js/ui.js', 'js/logic.js', 'js/controls.js', 'js/storage.js', 'js/firebase-config.js', 'js/sample.js', 'js/prompt.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -26,12 +26,7 @@ self.addEventListener('fetch', e => {
   }
 });
 
-/* Avisos de la sesión: llegan de la función «avisos» aunque la app esté cerrada. */
-self.addEventListener('push', e => {
-  let d = {};
-  try {d = e.data ? e.data.json() : {}} catch (x) {d = {body: e.data ? e.data.text() : ''}}
-  e.waitUntil(self.registration.showNotification(d.title || 'La Hoja', {body: d.body || '', tag: d.tag || 'la-hoja', renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png'}));
-});
+/* Al tocar un aviso de la sesión se abre La Hoja. */
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(cs => {
