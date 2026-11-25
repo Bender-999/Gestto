@@ -11,6 +11,11 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 5. Horario habitual, mínimos diarios, bloques sin intercalar, pausa, tareas manuales y asignaturas en espera.
 6. Gráfico de cabecera con una columna por día y el reparto por asignatura.
 
+## Publicación (25 de noviembre de 2026)
+
+- Firebase configurado (proyecto `la-hoja-15712`): datos sincronizados con la cuenta de Google.
+- Publicación automática en https://la-hoja-15712.web.app al subir a `main` y dirección de pruebas para cada solicitud de cambios.
+
 ## Versión 2.0.1 (16 de noviembre de 2026)
 
 - La app pasa a llamarse **La Hoja**. El formato de la IA (`hoja-carga/1`) y la clave de los datos no cambian.

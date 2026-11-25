@@ -10,7 +10,8 @@ La Hoja (antes «Hoja de carga de estudio») es un planificador personal de un �
 
 - **Pregunta antes de construir** si algo no está claro o toca una decisión de `docs/decisiones.md`. El usuario prefiere responder preguntas antes que rehacer trabajo.
 - Prueba los cambios: `npm test` para la lógica y `npm start` para verla en `http://localhost:5173`.
-- Antes de publicar, sube `VERSION` en `sw.js`. Si no, los dispositivos instalados siguen con la copia antigua.
+- **Subir a `main` publica la app** en https://la-hoja-15712.web.app (GitHub Actions + Firebase Hosting). La versión de `sw.js` se pone sola en cada publicación. Trabaja en una rama y abre una solicitud de cambios: tendrá su propia dirección de pruebas. Detalles en `docs/despliegue.md`.
+- `firestore.rules` no se publica sola: tras cambiarla, `npx firebase-tools deploy --only firestore:rules`.
 - El identificador del formato de la IA (`hoja-carga/1`) y la clave de `localStorage` (`hoja-carga`) se quedan como están aunque la app se llame La Hoja: cambiarlos rompería los datos y los textos ya generados.
 - No añadas dependencias ni paso de compilación sin hablarlo. La app es HTML, CSS y módulos ES servidos tal cual.
 

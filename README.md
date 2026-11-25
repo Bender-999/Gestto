@@ -4,6 +4,8 @@ Herramienta de gestión de tiempo para estudios y proyectos. La app se llama **L
 
 Planificador de estudio personal. Una IA estima las tareas de cada asignatura o proyecto, tú ajustas prioridades y tiempos, y la hoja reparte tus horas entre los días que tienes. Incluye un temporizador de sesión (hacer, revisar, descanso, pausa) y estadísticas de lo que estudias de verdad frente a lo previsto.
 
+Publicada en **https://la-hoja-15712.web.app**: se instala como app en Windows y en el iPhone. Cada cambio que llega a `main` se publica solo.
+
 Es una app web sin compilación (HTML, CSS y JavaScript con módulos ES) que se instala como aplicación en Windows y en el iPhone. Con Firebase configurado, los datos se sincronizan entre dispositivos y funciona sin conexión.
 
 ## Probarla en local
