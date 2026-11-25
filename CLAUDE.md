@@ -43,6 +43,11 @@ Plan a mano (versión 3 de `app`):
 - Al marcar una tarea hecha desde la ventana del día, el usuario elige qué día la hizo (`markDone` con ese día).
 - Gráfico de días: cuántos días se ven se guarda por dispositivo en `localStorage` (`la-hoja-ui`).
 
+Versión simplificada (móvil):
+- Se activa por dispositivo con `uiPref.simple` (también en `la-hoja-ui`). `render()` llama a `renderSimple` y oculta la versión completa.
+- Pantallas según `sp`: `'dia'` (`renderSimpleDay`, usa `dayView` y la lista de `dayViewModal(al, true)`), `'sesion'` (`renderSimpleSession`, mismos `data-act` que la sesión completa) y `'resumen'` (`renderSimpleSummary`, con `dayStats` de `logic.js`).
+- Cambiar de día: `spGo`, botones `data-spgo` y deslizar (eventos táctiles).
+
 Horario (versión 2 de `app`):
 - `app.sched[0..6]` (lunes = 0) es `{slots: [{ini: 'HH:MM', fin: 'HH:MM'}]}`.
 - Un día del calendario es `{d, h, slots?, auto?}`. Si tiene franjas, `h` se calcula de ellas.
