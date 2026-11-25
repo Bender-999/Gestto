@@ -48,6 +48,12 @@ Versión simplificada (móvil):
 - Pantallas según `sp`: `'dia'` (`renderSimpleDay`, usa `dayView` y la lista de `dayViewModal(al, true)`), `'sesion'` (`renderSimpleSession`, mismos `data-act` que la sesión completa) y `'resumen'` (`renderSimpleSummary`, con `dayStats` de `logic.js`).
 - Cambiar de día: `spGo`, botones `data-spgo` y deslizar (eventos táctiles).
 
+Sesión y avisos:
+- `#runbar` (`renderRunbar` en `ui.js`): barra fija abajo mientras hay `S.app.run` y no se está en la pantalla de sesión. Usa los mismos `data-act`; `data-runbar` abre la sesión. `tick()` actualiza `#rbT`.
+- `alerts(S)` en `logic.js` calcula los avisos que vienen en la fase actual (`BRK_EVERY` 50 min, `BRK_LEN` 10 min). Solo depende del estado.
+- Los avisos salen solo con la app abierta: `tick()` llama a `checkAlerts`, que muestra `showToast` y, si la app no está a la vista y hay permiso (`uiPref.notif`), la notificación del sistema. No hay servidor: se descartó Web Push por necesitar el plan Blaze.
+- `sw.js` abre la app al tocar una notificación.
+
 Horario (versión 2 de `app`):
 - `app.sched[0..6]` (lunes = 0) es `{slots: [{ini: 'HH:MM', fin: 'HH:MM'}]}`.
 - Un día del calendario es `{d, h, slots?, auto?}`. Si tiene franjas, `h` se calcula de ellas.

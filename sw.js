@@ -25,3 +25,12 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => {const c = n.clone(); caches.open(VERSION).then(x => x.put(e.request, c)); return n})));
   }
 });
+
+/* Al tocar un aviso de la sesión se abre La Hoja. */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(cs => {
+    const c = cs.find(x => 'focus' in x);
+    return c ? c.focus() : self.clients.openWindow('./');
+  }));
+});

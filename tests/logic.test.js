@@ -143,3 +143,37 @@ test('dayStats resume el día: estudio, descansos, bloque más largo y tareas', 
   assert.equal(Math.round(o.tasks[0].real), 15);
   assert.equal(o.tasks[0].est, 10);
 });
+
+test('alerts: descanso a los 50 min seguidos, fin de tarea y fin del descanso', () => {
+  const S = L.newState();
+  L.parseText(JSON.stringify(SAMPLE)).subs.forEach(s => L.applySub(S, s));
+  const d = '2026-11-16', t0 = Date.UTC(2026, 10, 16, 15), min = 60000;
+  S.app.days = [{d, h: 4}];
+  L.startDay(S, d, t0);
+  const r = S.app.run, it = L.findItem(S, r.key, d);
+  let a = L.alerts(S);
+  assert.equal(a.find(x => x.kind === 'brk').at, t0 + 50 * min);
+  assert.equal(a.find(x => x.kind === 'tarea').at, t0 + it.m * min);
+  assert.deepEqual(L.alerts(S), a, 'no depende de la hora');
+  // 30 min estudiando, pasa a revisar: el descanso sigue contando desde el principio.
+  S.log['2026-11'] = [{a: r.sid, d, k: r.key, s: t0, e: t0 + 30 * min, t: 'd'}];
+  r.phase = 'review'; r.since = t0 + 30 * min;
+  a = L.alerts(S);
+  assert.equal(a.length, 1);
+  assert.equal(a[0].at, t0 + 50 * min);
+  // Descanso: avisa a los 10 min.
+  L.goBreak(S, t0 + 40 * min);
+  a = L.alerts(S);
+  assert.equal(a.length, 1);
+  assert.equal(a[0].kind, 'fin');
+  assert.equal(a[0].at, t0 + 50 * min);
+  // Tras el descanso, el contador de 50 min vuelve a empezar.
+  L.resumeWork(S, t0 + 48 * min);
+  assert.equal(L.alerts(S)[0].at, t0 + 98 * min);
+  // En pausa no hay avisos; una pausa larga cuenta como descanso.
+  L.goPause(S, t0 + 60 * min);
+  assert.deepEqual(L.alerts(S), []);
+  L.unpause(S, t0 + 75 * min);
+  assert.equal(L.alerts(S)[0].at, t0 + 125 * min);
+  assert.deepEqual(L.alerts({app: {run: null}, subs: {}, log: {}}), []);
+});

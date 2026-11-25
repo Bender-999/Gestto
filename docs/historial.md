@@ -11,6 +11,12 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 5. Horario habitual, mínimos diarios, bloques sin intercalar, pausa, tareas manuales y asignaturas en espera.
 6. Gráfico de cabecera con una columna por día y el reparto por asignatura.
 
+## Versión 2.4 (25 de noviembre de 2026)
+
+- Barra de la sesión flotante: en las demás pantallas, con la tarea, el tiempo y los botones Descanso o Reanudar y Hecha. Tocarla abre la sesión.
+- Avisos con La Hoja abierta: «Toca descanso» a los 50 min seguidos, «Se acabó el descanso» a los 10 min y «Tiempo cumplido» al llegar a lo estimado. Salen dentro de la app y, en Windows, también como notificación del sistema con la app minimizada.
+- `alerts` en la lógica, con prueba.
+
 ## Versión 2.3 (25 de noviembre de 2026)
 
 - Versión simplificada para el móvil, activable por dispositivo: un día por página con botón grande para empezar, sesión mínima con menú «Más» y resumen del día al acabar.
