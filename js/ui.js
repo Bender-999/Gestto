@@ -25,6 +25,14 @@ const hTxt = x => nh(x) + ' h';
 let S = L.newState(), view = 'config', scope = 'general', expanded = new Set(), undo = null, month = TODAY.slice(0, 7);
 let draft = {text: '', res: null, diffs: null}, confirmDel = false, props = null, parar = false, showExtra = false, planAdd = false, formErr = '';
 let pick = null, pickMonth = null, menuOpen = null, slotEdit = null, dayPop = null;
+/* Gráfico de días: preferencias de este dispositivo (cuántos días se ven). */
+const UIK = 'la-hoja-ui';
+const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
+const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
+let chartN = [3, 7, 10, 14].includes(uiPref.n) ? uiPref.n : (innerWidth < 640 ? 7 : 14), chartStart = TODAY, chartAnim = '';
+let dayView = null, doneAsk = null, moveAsk = null, selMode = false, selAsk = null;
+const sel = new Set();
+const exitSel = () => {selMode = false; selAsk = null; sel.clear()};
 let ma = {sid: '', nom: '', min: 30, pri: 1}, ex = {sid: '', nom: ''};
 let store = {kind: 'local'};
 
@@ -44,6 +52,7 @@ function render() {
   else if (view === 'datos') renderData();
   else if (scope === 'general') renderGeneral(al, ob);
   else renderSubject(al, ob);
+  $('overlay').innerHTML = view === 'sesion' || scope === 'nueva' ? '' : dayViewModal(al);
   renderAccount();
   tick();
   if (a && $(a) && $(a) !== document.activeElement) $(a).focus();
@@ -79,26 +88,142 @@ function renderHead(al, ob) {
       $('lead').textContent = `Tu objetivo llega hasta ${o.t.name} y pide ${fmt(o.need)}.` + (s.limites&&s.limites.length>1?' Fechas: '+s.limites.map(l=>l.nombre+' '+dayLabel(l.fecha)).join(', ')+'.' : s.limite?` Fecha límite: ${dayLabel(s.limite)}.`:'');
     }
   }
-  const open = al.days.filter(d => !d.closed), maxM = Math.max(60, ...open.map(d => Math.max(d.h * 60, al.plan[d.d].reduce((a, r) => a + r.m, 0))));
-  const short = m => nh(Math.round(m / 15) / 4);
-  const seen = new Set();
-  const cols = open.map(d => {
-    const by = {};
-    al.plan[d.d].forEach(r => {by[r.it.sid] = (by[r.it.sid] || 0) + r.m});
-    const rows = [...new Set(al.plan[d.d].map(r => r.it.sid))], tot = Object.values(by).reduce((a, b) => a + b, 0), base = Math.max(d.h * 60, tot, 1);
-    const segs = rows.map(id => {
-      const m = by[id], mine = scope === 'general' || id === scope; seen.add(id);
-      const nm = S.subs[id] ? S.subs[id].nombre : id, tall = m / maxM * 132 >= 20;
-      return `<i style="height:${100 * m / base}%;background:${mine ? colorOf(id) : 'var(--line)'};color:${mine ? 'var(--bg)' : 'var(--muted)'}" title="${esc(nm)}: ${fmt(m)}">${tall ? short(m) : ''}</i>`;
-    }).join('');
-    const x = new Date(d.d + 'T00:00:00Z'), lab = x.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'short'}).replace('.', '');
-    const own = scope === 'general' ? tot : (by[scope] || 0);
-    return `<div class="dc" title="${dayLabel(d.d)}: ${fmt(tot)} de ${fmt(d.h * 60)}"><b>${scope === 'general' ? fmt(tot) : (own ? fmt(own) : '—')}</b><div class="dtrack" style="height:${Math.max(6, 132 * Math.max(d.h * 60, tot) / maxM)}px">${segs}</div><span>${lab}<br>${x.getUTCDate()}/${x.getUTCMonth() + 1}</span></div>`;
-  }).join('');
-  const legend = [...seen].sort((a, b) => S.app.order.indexOf(a) - S.app.order.indexOf(b)).filter(id => scope === 'general' || id === scope).map(id => `<span>${sw(id)}${esc(S.subs[id].nombre)}</span>`).join('') + (scope === 'general' ? '' : '<span><span class="sw" style="background:var(--line)"></span>Otras asignaturas</span>') + '<span><span class="sw" style="background:var(--track);box-shadow:inset 0 0 0 1px var(--line)"></span>Libre</span>';
-  const miss = ob.list.filter(o => o.miss > 0 && (scope === 'general' || o.sid === scope)).map(o => `${esc(o.s.nombre)} ${fmt(o.miss)}`).join(' · ');
-  $('chart').innerHTML = open.length ? `<div class="dcols-wrap"><div class="dcols">${cols}</div></div><div class="legend">${legend}${miss ? `<span class="neg"><span class="sw hatch"></span>Sin sitio: ${miss}</span>` : ''}</div>` : '<div class="empty">Añade días para ver el reparto de horas.</div>';
+  renderChart(al, ob);
 }
+/* ---------- Gráfico de días ---------- */
+const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const WD = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+function groupRows(rows) {
+  const out = [];
+  for (const r of rows) {
+    const l = out[out.length - 1];
+    if (l && l.sid === r.it.sid && l.done === !!r.done) l.m += r.m;
+    else out.push({sid: r.it.sid, done: !!r.done, m: r.m});
+  }
+  return out;
+}
+function renderChart(al, ob) {
+  const n = chartN, dates = [...Array(n)].map((_, i) => L.addDays(chartStart, i)), byDay = {};
+  al.days.forEach(x => {byDay[x.d] = x});
+  const H = 170, seen = new Set();
+  const info = dates.map(d => {
+    const x = byDay[d], rows = al.plan[d] || [], tot = rows.reduce((a, r) => a + r.m, 0), cap = x ? x.h * 60 : 0;
+    const free = x && !x.closed ? Math.max(0, al.rem[d] || 0) : 0;
+    return {d, x, rows, tot, cap, free};
+  });
+  const maxM = Math.max(60, ...info.map(o => Math.max(o.cap, o.tot)));
+  const col = o => {
+    const dt = new Date(o.d + 'T00:00:00Z'), wd = dt.getUTCDay(), we = wd === 0 || wd === 6, today = o.d === TODAY;
+    const mine = id => scope === 'general' || id === scope;
+    const segs = groupRows(o.rows).map(g => {
+      seen.add(g.sid);
+      const h = g.m / maxM * H, nm = S.subs[g.sid] ? S.subs[g.sid].nombre : g.sid;
+      return `<i class="sg ${g.done ? 'done' : ''}" style="height:${h.toFixed(1)}px;background:${mine(g.sid) ? colorOf(g.sid) : 'var(--line)'}" title="${esc(nm)}: ${fmt(g.m)}${g.done ? ' (hecho)' : ''}">${h >= 20 && mine(g.sid) ? `<em>${esc(nm)}</em>` : ''}</i>`;
+    }).join('');
+    const freeH = o.free / maxM * H;
+    const own = scope === 'general' ? o.tot : o.rows.filter(r => r.it.sid === scope).reduce((a, r) => a + r.m, 0);
+    const hm2 = m => Math.floor(m / 60) + ':' + String(Math.round(m % 60)).padStart(2, '0');
+    const top = own ? `<span class="f">${fmt(own)}</span><span class="s">${hm2(own)}</span>` : o.tot ? '—' : o.x ? (o.x.closed ? '' : 'libre') : '';
+    const lbl = `${dayLabel(o.d, {weekday: 'long', month: 'long'})}: ${o.x ? fmt(o.tot) + ' de ' + fmt(o.cap) : 'sin estudio'}`;
+    return `<button type="button" class="dch-col ${today ? 'today' : ''} ${we ? 'we' : ''} ${o.x ? '' : 'off'} ${o.x && o.x.closed ? 'past' : ''}" data-dayview="${o.d}" aria-label="${esc(lbl)}" title="${esc(lbl)}">
+      <span class="dch-top">${top}</span>
+      <span class="dch-bar" style="height:${Math.max(o.x ? 8 : 4, (Math.max(o.cap, o.tot) / maxM * H)).toFixed(1)}px">${freeH >= 1 ? `<i class="sg free" style="height:${freeH.toFixed(1)}px">${freeH >= 18 && n <= 10 ? '<em>libre</em>' : ''}</i>` : ''}${segs}</span>
+      <span class="dch-d"><b>${today ? 'Hoy' : WD[wd]}</b>${dt.getUTCDate()}</span></button>`;
+  };
+  const groups = [];
+  info.forEach(o => {const m = o.d.slice(0, 7), l = groups[groups.length - 1]; if (l && l.m === m) l.list.push(o); else groups.push({m, list: [o]})});
+  const body = groups.map(g => {const [y, m] = g.m.split('-').map(Number); return `<div class="dch-m" style="flex:${g.list.length}"><div class="dch-mh">${MES[m - 1]}${y !== +TODAY.slice(0, 4) ? ' ' + y : ''}</div><div class="dch-cols">${g.list.map(col).join('')}</div></div>`}).join('');
+  const last = dates[dates.length - 1], rng = `${dayLabel(dates[0], {weekday: undefined})} – ${dayLabel(last, {weekday: undefined})}`;
+  const legend = [...seen].filter(id => scope === 'general' || id === scope).sort((a, b) => S.app.order.indexOf(a) - S.app.order.indexOf(b)).map(id => `<span>${sw(id)}${esc(S.subs[id] ? S.subs[id].nombre : id)}</span>`).join('') +
+    (scope === 'general' ? '' : '<span><span class="sw" style="background:var(--line)"></span>Otras</span>') +
+    '<span><span class="sw free"></span>Libre</span><span><span class="sw donesw"></span>Hecho</span>';
+  const miss = ob.list.filter(o => o.miss > 0 && (scope === 'general' || o.sid === scope)).map(o => `${esc(o.s.nombre)} ${fmt(o.miss)}`).join(' · ');
+  $('chart').innerHTML = `<div class="dch-nav"><div class="dch-btns"><button type="button" class="icon round" data-chnav="-1" aria-label="Días anteriores">‹</button><button type="button" class="btn ghost sm" data-chnav="0" ${chartStart === TODAY ? 'disabled' : ''}>Hoy</button><button type="button" class="icon round" data-chnav="1" aria-label="Días siguientes">›</button><span class="dch-rng">${rng}</span></div>
+    ${seg({key: 'chartN', value: n, size: 'sm', label: 'Días que se ven', options: [3, 7, 10, 14].map(v => ({v, label: v + ' días'}))})}</div>
+    <div class="dch-win ${chartAnim} n${n}">${body}</div>
+    <div class="legend">${legend}${miss ? `<span class="neg"><span class="sw hatch"></span>Sin sitio: ${miss}</span>` : ''}<span class="hint">Toca un día para ver y mover sus tareas.</span></div>`;
+  chartAnim = '';
+}
+
+/* ---------- Ventana de un día ---------- */
+const CHECK = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg>';
+const DOTS = '<svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="9" cy="3" r="1.6"/><circle cx="3" cy="9" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="3" cy="15" r="1.6"/><circle cx="9" cy="15" r="1.6"/></svg>';
+function doneDayOptions(d) {
+  const opts = [{v: TODAY, label: 'Hoy'}];
+  if (d !== TODAY && d < TODAY) opts.push({v: d, label: dayLabel(d, {weekday: 'short', month: undefined})});
+  const ay = L.addDays(TODAY, -1); if (ay !== d || d >= TODAY) if (!opts.some(o => o.v === ay)) opts.push({v: ay, label: 'Ayer'});
+  return opts;
+}
+/* Casilla de selección: estado 'on', 'part' (algunas) u ''. */
+const selBox = (st, attrs, label) => `<button type="button" class="dv-sel ${st}" role="checkbox" aria-checked="${st === 'on' ? 'true' : st === 'part' ? 'mixed' : 'false'}" aria-label="${esc(label)}" ${attrs}>${st === 'part' ? '<i></i>' : CHECK}</button>`;
+function dayViewModal(al) {
+  const d = dayView; if (!d) return '';
+  const x = S.app.days.find(y => y.d === d), rows = al.plan[d] || [], past = d < TODAY, closed = !!S.app.closed[d];
+  const tot = rows.reduce((a, r) => a + r.m, 0), free = x && !past && !closed ? Math.max(0, al.rem[d] || 0) : 0;
+  const slots = x && x.slots && x.slots.length ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : '';
+  const study = new Set(S.app.days.filter(y => y.d >= TODAY && !S.app.closed[y.d]).map(y => y.d));
+  const open = rows.filter(r => !r.done && !past).map(r => r.it.key);
+  [...sel].forEach(k => {if (!open.includes(k)) sel.delete(k)});
+  const keysOf = (sid, gid) => rows.filter(r => !r.done && !past && r.it.sid === sid && (!gid || r.it.gid === gid)).map(r => r.it.key);
+  const stOf = ks => !ks.length ? '' : ks.every(k => sel.has(k)) ? 'on' : ks.some(k => sel.has(k)) ? 'part' : '';
+  const calMarks = Object.fromEntries([...study].map(v => [v, 1]));
+  const item = r => {
+    const it = r.it, k = it.key, on = sel.has(k), part = r.part ? ` · parte ${r.part}/${r.parts}` : '';
+    const short = it.name.startsWith(it.gName + ' · ') ? it.name.slice(it.gName.length + 3) : it.name;
+    const nm = short + (it.extra ? ' · fuera del plan' : '');
+    let ask = '';
+    if (!selMode && doneAsk === k) {
+      ask = `<li class="dv-ask"><span class="lbl">¿Qué día la hiciste?</span>${chips({key: 'doneOn', id: k, value: '', options: doneDayOptions(d), label: 'Día en que la hiciste'})}
+        ${datePick({key: 'doneOn', id: k, value: '', open: pick === 'doneOn|' + k, month: pickMonth, today: TODAY, label: 'Otro día', empty: 'Otro día…', allowed: v => v <= TODAY, foot: ''})}
+        <button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></li>`;
+    } else if (!selMode && moveAsk === k) {
+      ask = `<li class="dv-ask"><span class="lbl">Mover a otro día de estudio${it.pinned ? ` · ahora fijada el ${dayLabel(it.pinned)}` : ''}</span>
+        ${datePick({key: 'moveTo', id: k, value: it.pinned || '', inline: true, month: pickMonth, today: TODAY, label: 'Mover a', allowed: v => study.has(v), marks: calMarks, foot: ''})}
+        <div class="row-btns">${it.pinned ? `<button type="button" class="btn ghost sm" data-dvunpin="${esc(k)}">Soltar: que la coloque el plan</button>` : ''}<button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></div></li>`;
+    }
+    const canSel = selMode && !r.done && !past;
+    return `<li class="dv-r ${r.done ? 'done' : ''} ${on ? 'sel' : ''}" data-key="${esc(k)}">
+      ${selMode ? (canSel ? selBox(on ? 'on' : '', `data-dvselk="${esc(k)}"`, 'Seleccionar ' + it.name) : '<span class="dv-sel off"></span>') : ''}
+      <button type="button" class="dv-chk" data-dvdone="${esc(k)}" aria-pressed="${!!r.done}" aria-label="${r.done ? 'Desmarcar ' : 'Marcar hecha '}${esc(it.name)}">${CHECK}</button>
+      ${!past && !r.done ? `<span class="dv-h" data-dvdrag="1" title="Arrastra para cambiar el orden" aria-hidden="true">${DOTS}</span>` : '<span class="dv-h off"></span>'}
+      <span class="dv-t"><b>${esc(nm)}</b><small>${fmt(r.m)}${part}${it.pinned === d ? ' · <span class="pin">Fija</span>' : ''}${r.done ? ' · hecha' : ''}</small></span>
+      ${!r.done && !past && !selMode ? `<button type="button" class="btn ghost sm" data-dvmove="${esc(k)}" aria-expanded="${moveAsk === k}">Mover</button>` : '<span></span>'}</li>${ask}`;
+  };
+  /* Lista en el orden del día, con una cabecera cada vez que empieza otra asignatura o grupo. */
+  let list = '', ls = null, lg = null;
+  rows.forEach((r, i) => {
+    const it = r.it;
+    if (it.sid !== ls) {
+      let m = 0; for (let j = i; j < rows.length && rows[j].it.sid === it.sid; j++) m += rows[j].m;
+      const ks = keysOf(it.sid);
+      list += `<li class="dv-hd sub">${selMode && ks.length ? selBox(stOf(ks), `data-dvsel="${esc(it.sid)}"`, 'Seleccionar todo ' + it.subName) : ''}${sw(it.sid)}<b>${esc(it.subName)}</b><span class="num">${fmt(m)}</span></li>`;
+      ls = it.sid; lg = null;
+    }
+    if (it.gid !== lg) {
+      const ks = keysOf(it.sid, it.gid);
+      list += `<li class="dv-hd grp">${selMode && ks.length ? selBox(stOf(ks), `data-dvsel="${esc(it.sid + '|' + it.gid)}"`, 'Seleccionar todo ' + it.gName) : ''}<span>${esc(it.gName)}</span></li>`;
+      lg = it.gid;
+    }
+    list += item(r);
+  });
+  let bar = '';
+  if (selMode) {
+    const n = sel.size, anyPin = [...sel].some(k => {const s = S.subs[k.split('/')[0]]; return s && s.pin && s.pin[k]});
+    let ask = '';
+    if (n && selAsk === 'done') ask = `<div class="dv-bar-ask"><span class="lbl">¿Qué día las hiciste?</span>${chips({key: 'doneOnSel', value: '', options: doneDayOptions(d), label: 'Día en que las hiciste'})}${datePick({key: 'doneOnSel', value: '', open: pick === 'doneOnSel|', month: pickMonth, today: TODAY, label: 'Otro día', empty: 'Otro día…', allowed: v => v <= TODAY, foot: ''})}</div>`;
+    if (n && selAsk === 'move') ask = `<div class="dv-bar-ask"><span class="lbl">Mover ${n === 1 ? 'la tarea' : 'las ' + n + ' tareas'} a otro día de estudio</span>${datePick({key: 'moveToSel', value: '', inline: true, month: pickMonth, today: TODAY, label: 'Mover a', allowed: v => study.has(v), marks: calMarks, foot: ''})}</div>`;
+    bar = `<div class="dv-bar">${ask}<div class="dv-bar-r"><b>${n ? n + (n === 1 ? ' seleccionada' : ' seleccionadas') : 'Toca tareas o cabeceras para seleccionarlas'}</b>
+      <div class="row-btns">${n ? `<button type="button" class="btn sm" data-dvbulk="done" aria-expanded="${selAsk === 'done'}">Marcar hechas</button><button type="button" class="btn sm alt" data-dvbulk="move" aria-expanded="${selAsk === 'move'}">Mover</button>${anyPin ? '<button type="button" class="btn ghost sm" data-dvbulk="unpin">Soltar</button>' : ''}` : `<button type="button" class="btn ghost sm" data-dvbulk="all">Todas</button>`}<button type="button" class="btn ghost sm" data-dvbulk="exit">Cancelar</button></div></div></div>`;
+  }
+  const prev = L.addDays(d, -1), next = L.addDays(d, 1);
+  return `<div class="modal-bg" data-modalbg="dv"><div class="modal dv ${selMode ? 'selecting' : ''}" role="dialog" aria-modal="true" aria-label="${esc(dayLabel(d, {weekday: 'long', month: 'long'}))}">
+    <div class="modal-h"><button type="button" class="icon round" data-dvgo="${prev}" aria-label="Día anterior">‹</button><h3>${dayLabel(d, {weekday: 'long', month: 'long'})}${d === TODAY ? ' · hoy' : ''}</h3><button type="button" class="icon round" data-dvgo="${next}" aria-label="Día siguiente">›</button><button type="button" class="icon round" data-dvclose="1" aria-label="Cerrar">×</button></div>
+    <div class="dv-sub"><p class="sub">${x ? `${fmt(tot)} planificadas de ${fmt(x.h * 60)}${slots ? ' · ' + slots : ''}${closed ? ' · terminado' : ''}` : 'No es uno de tus días de estudio.'}</p>${open.length && !selMode ? '<button type="button" class="btn ghost sm" data-dvbulk="enter">Seleccionar</button>' : ''}</div>
+    ${rows.length ? `<ul class="dv-list" data-dvday="${d}">${list}</ul>${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para cambiar el orden. «Mover» la fija en otro día. Mantén pulsada una tarea o usa «Seleccionar» para elegir varias.</p>'}` : `<div class="empty">${x ? 'No hay tareas este día.' : past ? 'Día pasado sin estudio.' : 'Añádelo para que el plan le reparta tareas.'}</div>`}
+    ${bar || `<div class="modal-f">${free ? `<span class="sub">Libre: ${fmt(free)}</span>` : '<span></span>'}<div class="row-btns">${x && !past ? `<button type="button" class="btn ghost sm" data-dvslots="${d}">Editar franjas</button>` : ''}${!x && !past ? `<button type="button" class="btn sm" data-dvadd="${d}">Añadir este día</button>` : ''}<button type="button" class="btn sm" data-dvclose="1">Listo</button></div></div>`}
+  </div></div>`;
+}
+
 function renderWelcome() {
   $('main').innerHTML = `<section><div class="empty"><p>Aún no tienes asignaturas. Pulsa <b>+ Añadir</b>, copia el prompt, pásalo a tu IA con tus materiales y pega el resultado. Luego lo ajustas en Configuración y aparece en Plan, Sesión y Mis datos.</p></div>
    <div class="row-btns"><button class="btn" data-goadd="1">Añadir la primera</button><button class="btn ghost" data-sample="1">Probar con Estructuras de ejemplo</button></div></section>`;
@@ -456,6 +581,11 @@ function applySet(key, id, val, el) {
     case 'maMin': ma.min = n; render(); return;
     case 'maPri': ma.pri = n; render(); return;
     case 'exSub': ex.sid = val; render(); return;
+    case 'chartN': chartN = n; uiPref.n = n; saveUi(); render(); return;
+    case 'doneOn': {const it = L.findItem(S, id, TODAY); if (it) L.markDone(S, it, val, +S.subs[it.sid].real[it.key] || 0); doneAsk = null; pick = null; break}
+    case 'moveTo': {L.pinTask(S, id, val); moveAsk = null; pick = null; setStatus('Tarea fijada el ' + dayLabel(val) + '.'); break}
+    case 'doneOnSel': {for (const k of sel) {const it = L.findItem(S, k, TODAY); if (it && !it.done) L.markDone(S, it, val, +S.subs[it.sid].real[it.key] || 0)} exitSel(); pick = null; break}
+    case 'moveToSel': {const n = sel.size; for (const k of sel) L.pinTask(S, k, val); exitSel(); pick = null; setStatus((n === 1 ? 'Tarea fijada' : n + ' tareas fijadas') + ' el ' + dayLabel(val) + '.'); break}
     case 'switchTask': menuOpen = null; L.switchTask(S, val, Date.now()); commit(); return;
     default: return;
   }
@@ -496,6 +626,7 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Escape') {e.preventDefault(); slotEdit = null; render()}
   } else if (e.key === 'Escape' && (pick || menuOpen || slotEdit)) {pick = null; menuOpen = null; slotEdit = null; render()}
   else if (e.key === 'Escape' && dayPop) {dayPop = null; render()}
+  else if (e.key === 'Escape' && dayView) {if (doneAsk || moveAsk || selAsk) {doneAsk = moveAsk = selAsk = null} else if (selMode) exitSel(); else dayView = null; render()}
 });
 document.addEventListener('change', e => {
   const el = e.target, d = el.dataset, num = parseFloat(el.value);
@@ -509,6 +640,9 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('click', e => {
   if ((pick && !e.target.closest('.dp')) || (menuOpen && !e.target.closest('.mn'))) {pick = null; menuOpen = null; render(); if (!e.target.closest('button')) return}
+  if (e.target.dataset && e.target.dataset.modalbg === 'dv') {dayView = null; doneAsk = moveAsk = null; pick = null; exitSel(); render(); return}
+  if (lpFired) {lpFired = false; return}
+  if (selMode && dayView) {const row = e.target.closest('.dv-r[data-key]'); if (row && !row.classList.contains('done') && !e.target.closest('button,[data-dvdrag]')) {const k = row.dataset.key; if (sel.has(k)) sel.delete(k); else sel.add(k); render(); return}}
   if (dayPop && e.target.dataset && e.target.dataset.modalbg) {dayPop = null; slotEdit = null; render(); return}
   if (slotEdit && !e.target.closest('.slot-pop') && !e.target.closest('.slot')) {slotEdit = null; render(); return}
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
@@ -521,6 +655,28 @@ document.addEventListener('click', e => {
   if (d.slot === 'cancel') {slotEdit = null; render(); return}
   if (d.slot === 'del') {const sl = getSlots(slotEdit.sk).filter((_, k) => k !== slotEdit.j); setSlots(slotEdit.sk, sl); return}
   if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
+  if (d.chnav !== undefined) {const k = +d.chnav; if (k === 0) {chartAnim = chartStart > TODAY ? 'from-l' : 'from-r'; chartStart = TODAY} else {chartStart = L.addDays(chartStart, k * chartN); chartAnim = k > 0 ? 'from-r' : 'from-l'} render(); return}
+  if (d.dayview) {dayView = d.dayview; doneAsk = null; moveAsk = null; pick = null; exitSel(); render(); return}
+  if (d.dvclose) {dayView = null; doneAsk = moveAsk = null; pick = null; exitSel(); render(); return}
+  if (d.dvgo) {dayView = d.dvgo; doneAsk = moveAsk = null; pick = null; exitSel(); render(); return}
+  if (d.dvselk) {if (sel.has(d.dvselk)) sel.delete(d.dvselk); else sel.add(d.dvselk); render(); return}
+  if (d.dvsel) {const [sid, gid] = d.dvsel.split('|'), al = allocate(S, TODAY), ks = (al.plan[dayView] || []).filter(r => !r.done && r.it.sid === sid && (!gid || r.it.gid === gid)).map(r => r.it.key); const all = ks.every(k => sel.has(k)); ks.forEach(k => all ? sel.delete(k) : sel.add(k)); render(); return}
+  if (d.dvbulk) {
+    const a = d.dvbulk;
+    if (a === 'enter') {selMode = true; doneAsk = moveAsk = null}
+    else if (a === 'exit') exitSel();
+    else if (a === 'all') {const al = allocate(S, TODAY); (al.plan[dayView] || []).filter(r => !r.done).forEach(r => sel.add(r.it.key))}
+    else if (a === 'done') {selAsk = selAsk === 'done' ? null : 'done'; pick = null; pickMonth = TODAY.slice(0, 7)}
+    else if (a === 'move') {selAsk = selAsk === 'move' ? null : 'move'; pick = null; pickMonth = dayView.slice(0, 7)}
+    else if (a === 'unpin') {sel.forEach(k => L.pinTask(S, k, '')); exitSel(); touch(); return}
+    render(); return;
+  }
+  if (d.dvcancel) {doneAsk = moveAsk = null; pick = null; render(); return}
+  if (d.dvdone) {const it = L.findItem(S, d.dvdone, TODAY); if (it && it.done) {L.unmarkDone(S, it); touch()} else {doneAsk = doneAsk === d.dvdone ? null : d.dvdone; moveAsk = null; pick = null; pickMonth = TODAY.slice(0, 7); render()} return}
+  if (d.dvmove) {moveAsk = moveAsk === d.dvmove ? null : d.dvmove; doneAsk = null; pick = null; pickMonth = dayView.slice(0, 7); render(); return}
+  if (d.dvunpin) {L.pinTask(S, d.dvunpin, ''); moveAsk = null; touch(); return}
+  if (d.dvslots) {dayPop = d.dvslots; dayView = null; render(); return}
+  if (d.dvadd) {if (!S.app.days.some(y => y.d === d.dvadd)) S.app.days.push(makeDay(S.app, d.dvadd)); touch(); return}
   if (d.dayreset) {const i = S.app.days.findIndex(y => y.d === d.dayreset); if (i >= 0) S.app.days[i] = makeDay(S.app, d.dayreset); slotEdit = null; touch(); return}
   if (d.login) {store.login && store.login(); return}
   if (d.logout) {store.logout && store.logout(); return}
@@ -628,6 +784,74 @@ document.addEventListener('pointerdown', e => {
 ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, e => {if (e.pointerType !== 'mouse') clearTimeout(tipTimer)}));
 addEventListener('scroll', () => {if (!tip.hidden && !tipSuppress) hideTip()}, {passive: true});
 document.addEventListener('contextmenu', e => {if (e.target.closest('.cd[data-cal]')) e.preventDefault()});
+/* Ventana del día: arrastrar los puntos de una tarea cambia su orden dentro del día.
+   La tarea sigue al cursor (o al dedo) y una sombra marca el hueco donde caerá. */
+let dvDrag = null;
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-dvdrag]'); if (!h) return;
+  const li = h.closest('.dv-r'), ul = li && li.closest('.dv-list'); if (!li || !ul) return;
+  e.preventDefault(); clearTimeout(lpTimer);
+  /* Si la tarea está seleccionada junto a otras, se arrastran todas como un bloque. */
+  const group = selMode && sel.has(li.dataset.key) && sel.size > 1 ? [...ul.querySelectorAll('.dv-r')].filter(x => sel.has(x.dataset.key)) : [li];
+  const r = li.getBoundingClientRect(), ph = document.createElement('li');
+  ph.className = 'dv-ph'; ph.style.height = r.height + 'px';
+  ul.insertBefore(ph, li);
+  group.forEach(x => {if (x !== li) x.style.display = 'none'});
+  Object.assign(li.style, {position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 80, pointerEvents: 'none'});
+  li.classList.add('dragging');
+  if (group.length > 1) li.setAttribute('data-count', '+' + (group.length - 1));
+  dvDrag = {li, ul, ph, group, id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, y: e.clientY, x: e.clientX, start: [...ul.querySelectorAll('.dv-r')].map(x => x.dataset.key), box: ul.closest('.modal'), raf: 0};
+  try {h.setPointerCapture(e.pointerId)} catch (_) {}
+  const scroll = () => {
+    const g = dvDrag; if (!g) return;
+    const b = g.box.getBoundingClientRect(), edge = 56;
+    if (g.y < b.top + edge) g.box.scrollTop -= Math.ceil((b.top + edge - g.y) / 6);
+    else if (g.y > b.bottom - edge) g.box.scrollTop += Math.ceil((g.y - b.bottom + edge) / 6);
+    placeDv(g); g.raf = requestAnimationFrame(scroll);
+  };
+  dvDrag.raf = requestAnimationFrame(scroll);
+});
+function placeDv(g) {
+  const sibs = [...g.ul.querySelectorAll('.dv-r')].filter(x => !g.group.includes(x));
+  const after = sibs.find(x => {const r = x.getBoundingClientRect(); return g.y < r.top + r.height / 2});
+  if (after) {if (g.ph.nextElementSibling !== after) g.ul.insertBefore(g.ph, after)}
+  else {const last = sibs[sibs.length - 1]; if (last && last.nextElementSibling !== g.ph) last.after(g.ph)}
+}
+document.addEventListener('pointermove', e => {
+  const g = dvDrag; if (!g || g.id !== e.pointerId) return;
+  g.x = e.clientX; g.y = e.clientY;
+  g.li.style.left = (e.clientX - g.dx) + 'px'; g.li.style.top = (e.clientY - g.dy) + 'px';
+  placeDv(g);
+});
+/* Mantener pulsada una tarea entra en modo selección con esa tarea elegida. */
+let lpTimer = null, lpFired = false, lpAt = null;
+document.addEventListener('pointerdown', e => {
+  const row = dayView && e.target.closest('.dv-r[data-key]');
+  if (!row || row.classList.contains('done') || e.target.closest('button,[data-dvdrag]')) return;
+  lpAt = {x: e.clientX, y: e.clientY, k: row.dataset.key};
+  clearTimeout(lpTimer);
+  lpTimer = setTimeout(() => {
+    lpFired = true; doneAsk = moveAsk = null;
+    if (!selMode) {selMode = true; sel.clear()}
+    sel.add(lpAt.k);
+    try {navigator.vibrate && navigator.vibrate(12)} catch (_) {}
+    render();
+  }, 480);
+});
+document.addEventListener('pointermove', e => {if (lpAt && Math.hypot(e.clientX - lpAt.x, e.clientY - lpAt.y) > 8) clearTimeout(lpTimer)});
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => {clearTimeout(lpTimer); setTimeout(() => {lpFired = false}, 60)}));
+document.addEventListener('contextmenu', e => {if (e.target.closest('.dv-r')) e.preventDefault()});
+const dvEnd = e => {
+  const g = dvDrag; if (!g || g.id !== e.pointerId) return;
+  dvDrag = null; cancelAnimationFrame(g.raf);
+  g.group.forEach(x => g.ul.insertBefore(x, g.ph)); g.ph.remove();
+  g.li.classList.remove('dragging'); g.group.forEach(x => x.removeAttribute('style')); g.li.removeAttribute('data-count');
+  const keys = [...g.ul.querySelectorAll('.dv-r')].map(x => x.dataset.key);
+  if (keys.join('|') === g.start.join('|')) return;
+  L.setDayOrder(S, g.ul.dataset.dvday, keys); touch();
+};
+document.addEventListener('pointerup', dvEnd);
+document.addEventListener('pointercancel', dvEnd);
 setInterval(tick, 500);
 document.addEventListener('visibilitychange', () => {if (!document.hidden) {tick(); wake()}});
 

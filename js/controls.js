@@ -57,25 +57,27 @@ export function longDate(v) {
   const d = new Date(v + 'T00:00:00Z');
   return DIA[d.getUTCDay()] + ' ' + d.getUTCDate() + ' de ' + MES[d.getUTCMonth()] + (d.getUTCFullYear() !== new Date().getFullYear() ? ' de ' + d.getUTCFullYear() : '');
 }
-export function datePick({key, id, value, open, month, today, label, empty = 'Sin fecha', marks = {}}) {
+export function datePick({key, id, value, open, month, today, label, empty = 'Sin fecha', marks = {}, allowed = null, inline = false, foot = null}) {
   const tok = key + '|' + (id ?? '');
   const days = value ? Math.round((Date.parse(value) - Date.parse(today)) / 864e5) : null;
   const sub = value ? (days > 0 ? `faltan ${days} ${days === 1 ? 'día' : 'días'}` : days === 0 ? 'es hoy' : 'ya pasó') : '';
   let pop = '';
-  if (open) {
+  if (open || inline) {
     const m = month || (value || today).slice(0, 7), [y, mo] = m.split('-').map(Number);
     const first = new Date(Date.UTC(y, mo - 1, 1)), off = (first.getUTCDay() + 6) % 7, end = value ? iso(new Date(Date.parse(value) - 864e5)) : '';
     let cells = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => `<span class="dp-wd">${x}</span>`).join('');
     for (let i = 0; i < 42; i++) {
       const d = new Date(Date.UTC(y, mo - 1, 1 - off + i)), v = iso(d), inM = d.getUTCMonth() === mo - 1;
       const cls = [inM ? '' : 'out', v === today ? 'today' : '', v === value ? 'sel' : '', v === end ? 'end' : '', v < today ? 'past' : '', marks[v] ? 'mark' : ''].join(' ');
-      cells += `<button type="button" class="dp-d ${cls}" data-set="${key}"${idAttr(id)} data-val="${v}" aria-label="${longDate(v)}">${d.getUTCDate()}</button>`;
+      const dis = allowed && !allowed(v);
+      cells += `<button type="button" class="dp-d ${cls}" data-set="${key}"${idAttr(id)} data-val="${v}" aria-label="${longDate(v)}" ${dis ? 'disabled' : ''}>${d.getUTCDate()}</button>`;
     }
     pop = `<div class="dp-pop" role="dialog" aria-label="${esc(label)}">
       <div class="dp-head"><button type="button" class="icon round" data-dpm="-1" aria-label="Mes anterior">‹</button><b>${MES[mo - 1][0].toUpperCase() + MES[mo - 1].slice(1)} ${y}</b><button type="button" class="icon round" data-dpm="1" aria-label="Mes siguiente">›</button></div>
       <div class="dp-grid">${cells}</div>
-      <div class="dp-foot"><span>${value ? 'El trabajo acaba el ' + longDate(end) + ' (en verde claro).' : ''}</span>${value ? `<button type="button" class="btn ghost sm" data-set="${key}"${idAttr(id)} data-val="">Quitar fecha</button>` : ''}</div></div>`;
+      ${foot !== null ? foot : `<div class="dp-foot"><span>${value ? 'El trabajo acaba el ' + longDate(end) + ' (en verde claro).' : ''}</span>${value ? `<button type="button" class="btn ghost sm" data-set="${key}"${idAttr(id)} data-val="">Quitar fecha</button>` : ''}</div>`}</div>`;
   }
+  if (inline) return `<div class="dp dp-inline">${pop}</div>`;
   return `<div class="dp"><button type="button" class="dp-btn" data-dp="${esc(tok)}" aria-expanded="${!!open}" aria-label="${esc(label)}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4.5" width="14" height="12.5" rx="3"/><path d="M3 8.5h14M7 2.5v4M13 2.5v4"/></svg><span><b>${value ? esc(longDate(value)) : esc(empty)}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>${pop}</div>`;
 }
 
