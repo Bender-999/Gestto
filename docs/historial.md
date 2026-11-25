@@ -15,6 +15,8 @@ Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estruc
 
 - Gráfico de días nuevo: 3, 7, 10 o 14 días, botones con animación, meses separados, hoy y fines de semana visibles, hueco libre rayado y nombres en los tramos.
 - Ventana del día al tocar una columna: marcar hecha eligiendo el día, reordenar arrastrando y mover a otro día (la tarea queda fija).
+- Al arrastrar, la tarea sigue al cursor y un hueco punteado marca dónde caerá.
+- Selección múltiple con cabeceras por asignatura y grupo: marcar hechas, mover, soltar y arrastrar en bloque.
 - Datos: `app.v` 3 con `app.dord`, y `pin` en cada asignatura.
 
 ## Publicación (25 de noviembre de 2026)
