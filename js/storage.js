@@ -26,7 +26,11 @@ async function openFirebase(onError) {
   const [{initializeApp}, A, F] = await Promise.all([
     import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js'), import(FB + 'firebase-firestore.js')
   ]);
-  const app = initializeApp(firebaseConfig);
+  /* Publicada en Firebase Hosting, el inicio de sesión va por el mismo dominio de la app:
+     Safari (iPhone) bloquea el almacenamiento de terceros y, si no, la redirección no vuelve. */
+  const cfg = {...firebaseConfig};
+  if (/\.(web\.app|firebaseapp\.com)$/.test(location.hostname)) cfg.authDomain = location.hostname;
+  const app = initializeApp(cfg);
   const auth = A.getAuth(app);
   const db = F.initializeFirestore(app, {localCache: F.persistentLocalCache({tabManager: F.persistentMultipleTabManager()})});
   await A.getRedirectResult(auth).catch(() => {});

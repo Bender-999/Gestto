@@ -1,66 +1,52 @@
-# Despliegue: Firebase, PC e iPhone
+# Publicación: Firebase, PC e iPhone
 
-Objetivo: que la hoja esté publicada en una dirección propia, se instale como app en Windows y en el iPhone y guarde los datos en tu cuenta para que los dos dispositivos vean lo mismo.
+La Hoja está publicada en **https://la-hoja-15712.web.app** (proyecto de Firebase `la-hoja-15712`).
 
-Todo cabe en el plan gratuito de Firebase (Spark) para un solo usuario.
+- **Datos**: Firestore (edición Standard, `europe-southwest1`). Todo cuelga de `users/<uid>/` y las reglas de `firestore.rules` solo dejan a cada cuenta leer y escribir lo suyo.
+- **Cuenta**: inicio de sesión con Google.
+- **Configuración**: `js/firebase-config.js`. Los valores no son secretos.
 
-## 1. Crear el proyecto de Firebase
+## Cómo se publica
 
-1. Entra en [console.firebase.google.com](https://console.firebase.google.com) con tu cuenta de Google y crea un proyecto (por ejemplo, `la-hoja`). Google Analytics no hace falta.
-2. **Authentication › Método de inicio de sesión**: activa **Google**.
-3. **Firestore Database › Crear base de datos**: elige el modo de producción y una ubicación en Europa (`europe-southwest1`, que es Madrid, o `eur3`). La ubicación no se puede cambiar después.
-4. **Configuración del proyecto › General › Tus apps**: añade una app **Web** (icono `</>`), con el alias que quieras. No hace falta marcar Hosting en este paso.
-5. Copia el objeto `firebaseConfig` que aparece y pégalo en `js/firebase-config.js` en lugar de `null`:
+- **Subir a `main` publica solo.** El flujo `.github/workflows/firebase-hosting-merge.yml` pasa las pruebas, pone una versión nueva al service worker y sube la app. Tarda uno o dos minutos. Si las pruebas fallan, no se publica.
+- **Cada solicitud de cambios tiene una dirección de pruebas** que dura 7 días. GitHub la deja como comentario en la solicitud. En esa dirección no se puede entrar con Google, porque el dominio no está autorizado, así que guarda solo en el navegador. Sirve para ver cambios, no para usar tus datos.
+- **Las reglas de Firestore no se publican solas.** Si cambias `firestore.rules`, publícalas con `npx firebase-tools deploy --only firestore:rules`.
 
-```js
-export const firebaseConfig = {
-  apiKey: '...',
-  authDomain: 'la-hoja.firebaseapp.com',
-  projectId: 'la-hoja',
-  storageBucket: 'la-hoja.appspot.com',
-  messagingSenderId: '...',
-  appId: '...'
-};
-```
+## Puesta en marcha (una sola vez)
 
-Estos valores no son secretos y se pueden subir al repositorio. Quien protege los datos son las reglas de `firestore.rules`: cada usuario solo lee y escribe lo suyo.
-
-## 2. Publicar
-
-Desde la carpeta del repositorio:
+Desde la carpeta del repositorio, con la rama que trae esta configuración:
 
 ```bash
 npx firebase-tools login
-npx firebase-tools use --add          # elige el proyecto y ponle el alias "default"
-npx firebase-tools deploy             # sube la app (Hosting) y las reglas de Firestore
+npx firebase-tools deploy
+npx firebase-tools init hosting:github
 ```
 
-Al terminar te da la dirección, del tipo `https://la-hoja.web.app`. Para siguientes versiones basta con `npm run deploy`. **Antes de cada publicación, sube `VERSION` en `sw.js`.**
+1. `login` abre el navegador para entrar con tu cuenta de Google.
+2. `deploy` sube las reglas de Firestore y la primera versión de la app.
+3. `init hosting:github` conecta GitHub con Firebase y guarda en el repositorio el secreto `FIREBASE_SERVICE_ACCOUNT_LA_HOJA_15712`. A sus preguntas:
+   - Repositorio: `Bender-999/Gestto`.
+   - Script de compilación antes de publicar: **No**.
+   - Publicar al fusionar en la rama principal: **Sí**, rama `main`.
+   - Si pregunta si sobrescribe los archivos de `.github/workflows`, da igual lo que respondas: los suyos y los nuestros hacen lo mismo.
 
-## 3. Instalarla
+### Inicio de sesión en el iPhone
 
-**Windows (Edge o Chrome)**: abre la dirección, pulsa el icono de instalar de la barra de direcciones (o Menú › Aplicaciones › Instalar esta página como aplicación). Queda con su icono en el menú Inicio y se abre en una ventana propia.
+En la app publicada, el inicio de sesión va por el propio dominio (`la-hoja-15712.web.app`), porque Safari bloquea el almacenamiento de terceros. Para que Google acepte ese dominio:
 
-**iPhone (Safari)**: abre la dirección, pulsa Compartir › **Añadir a pantalla de inicio**. Se abre a pantalla completa, sin la barra de Safari.
-
-En cada dispositivo, pulsa **Entrar con Google** la primera vez. A partir de ahí los cambios se sincronizan solos y, sin conexión, se guardan y suben al volver la red.
-
-## 4. Si el inicio de sesión falla en el iPhone
-
-Safari bloquea el almacenamiento de terceros, y el inicio de sesión por redirección necesita que la app y el dominio de autenticación sean el mismo. Si al volver de Google sigue pidiendo entrar:
-
-1. En `js/firebase-config.js`, cambia `authDomain` por el dominio donde está publicada la app (por ejemplo, `la-hoja.web.app`).
-2. En [Google Cloud › APIs y servicios › Credenciales](https://console.cloud.google.com/apis/credentials), abre el cliente OAuth web que creó Firebase y añade en «URI de redireccionamiento autorizados» `https://la-hoja.web.app/__/auth/handler`.
-3. Comprueba que el dominio aparece en Firebase › Authentication › Configuración › Dominios autorizados.
-4. Publica de nuevo.
+1. Entra en [Google Cloud › APIs y servicios › Credenciales](https://console.cloud.google.com/apis/credentials?project=la-hoja-15712).
+2. Abre el cliente «Web client (auto created by Google Service)».
+3. En **URI de redireccionamiento autorizados**, añade `https://la-hoja-15712.web.app/__/auth/handler` y guarda.
 
 Más detalle: [Best practices for using signInWithRedirect](https://firebase.google.com/docs/auth/web/redirect-best-practices).
 
-## 5. Pasar datos de la versión anterior
+## Instalarla
 
-Si tienes datos en la hoja publicada en Claude o en el `localStorage` de un navegador, la hoja los convierte sola al formato nuevo (`migrateApp` en `js/logic.js`). Para pasarlos a Firebase, la forma más sencilla es exportar cada asignatura con **Copiar texto actual** y pegarla en la versión nueva con **+ Añadir**. El progreso marcado no viaja con el texto.
+- **Windows (Edge o Chrome)**: abre https://la-hoja-15712.web.app y pulsa el icono de instalar de la barra de direcciones (o Menú › Aplicaciones › Instalar esta página como aplicación). Queda en el menú Inicio y se puede anclar a la barra de tareas.
+- **iPhone (Safari)**: abre la dirección y pulsa Compartir › **Añadir a pantalla de inicio**.
 
-## Notas
+En cada dispositivo, pulsa **Entrar con Google** la primera vez.
 
-- La versión del SDK de Firebase está fijada en `js/storage.js` (`FB`). Se puede actualizar cambiando el número.
-- Sin `firebase-config.js`, la app funciona igual, pero guarda solo en el navegador donde la abras.
+## Probar en local
+
+`npm start` y abre http://localhost:5173. En local el inicio de sesión usa una ventana emergente y guarda en la misma base de datos que la app publicada, así que lo que hagas en local con tu cuenta también se ve en el móvil.

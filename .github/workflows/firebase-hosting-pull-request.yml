@@ -1,0 +1,25 @@
+# Cada solicitud de cambios recibe una dirección de pruebas temporal (dura 7 días).
+# GitHub la deja como comentario en la propia solicitud.
+name: Dirección de pruebas
+on: pull_request
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+jobs:
+  vista_previa:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pruebas de la lógica
+        run: npm test
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LA_HOJA_15712 }}
+          expires: 7d
+          projectId: la-hoja-15712

@@ -1,0 +1,24 @@
+# Publica La Hoja en https://la-hoja-15712.web.app cada vez que se sube algo a main.
+name: Publicar en Firebase
+on:
+  push:
+    branches: [main]
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pruebas de la lógica
+        run: npm test
+      - name: Versión del service worker
+        # Cada publicación lleva su propia versión para que los dispositivos instalados se actualicen.
+        run: sed -i "s/^const VERSION = '[^']*'/const VERSION = 'la-hoja-${GITHUB_SHA::7}'/" sw.js
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LA_HOJA_15712 }}
+          channelId: live
+          projectId: la-hoja-15712
