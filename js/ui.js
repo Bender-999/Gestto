@@ -724,26 +724,49 @@ document.addEventListener('pointerdown', e => {
 ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, e => {if (e.pointerType !== 'mouse') clearTimeout(tipTimer)}));
 addEventListener('scroll', () => {if (!tip.hidden && !tipSuppress) hideTip()}, {passive: true});
 document.addEventListener('contextmenu', e => {if (e.target.closest('.cd[data-cal]')) e.preventDefault()});
-/* Ventana del día: arrastrar los puntos de una tarea cambia su orden dentro del día. */
+/* Ventana del día: arrastrar los puntos de una tarea cambia su orden dentro del día.
+   La tarea sigue al cursor (o al dedo) y una sombra marca el hueco donde caerá. */
 let dvDrag = null;
 document.addEventListener('pointerdown', e => {
   const h = e.target.closest('[data-dvdrag]'); if (!h) return;
   const li = h.closest('.dv-r'), ul = li && li.closest('.dv-list'); if (!li || !ul) return;
-  e.preventDefault(); dvDrag = {li, ul, id: e.pointerId, moved: false};
-  li.classList.add('dragging'); try {h.setPointerCapture(e.pointerId)} catch (_) {}
+  e.preventDefault();
+  const r = li.getBoundingClientRect(), ph = document.createElement('li');
+  ph.className = 'dv-ph'; ph.style.height = r.height + 'px';
+  ul.insertBefore(ph, li);
+  Object.assign(li.style, {position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 80, pointerEvents: 'none'});
+  li.classList.add('dragging');
+  dvDrag = {li, ul, ph, id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, y: e.clientY, x: e.clientX, start: [...ul.querySelectorAll('.dv-r')].map(x => x.dataset.key), box: ul.closest('.modal'), raf: 0};
+  try {h.setPointerCapture(e.pointerId)} catch (_) {}
+  const scroll = () => {
+    const g = dvDrag; if (!g) return;
+    const b = g.box.getBoundingClientRect(), edge = 56;
+    if (g.y < b.top + edge) g.box.scrollTop -= Math.ceil((b.top + edge - g.y) / 6);
+    else if (g.y > b.bottom - edge) g.box.scrollTop += Math.ceil((g.y - b.bottom + edge) / 6);
+    placeDv(g); g.raf = requestAnimationFrame(scroll);
+  };
+  dvDrag.raf = requestAnimationFrame(scroll);
 });
+function placeDv(g) {
+  const sibs = [...g.ul.querySelectorAll('.dv-r')].filter(x => x !== g.li);
+  const after = sibs.find(x => {const r = x.getBoundingClientRect(); return g.y < r.top + r.height / 2});
+  if (after) {if (g.ph.nextElementSibling !== after) g.ul.insertBefore(g.ph, after)}
+  else {const last = sibs[sibs.length - 1]; if (last && last.nextElementSibling !== g.ph) last.after(g.ph)}
+}
 document.addEventListener('pointermove', e => {
   const g = dvDrag; if (!g || g.id !== e.pointerId) return;
-  const sibs = [...g.ul.querySelectorAll('.dv-r')].filter(x => x !== g.li);
-  const after = sibs.find(x => {const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2});
-  if (after) {if (g.li.nextElementSibling !== after) {g.ul.insertBefore(g.li, after); g.moved = true}}
-  else if (g.ul.lastElementChild !== g.li) {g.ul.appendChild(g.li); g.moved = true}
+  g.x = e.clientX; g.y = e.clientY;
+  g.li.style.left = (e.clientX - g.dx) + 'px'; g.li.style.top = (e.clientY - g.dy) + 'px';
+  placeDv(g);
 });
 const dvEnd = e => {
   const g = dvDrag; if (!g || g.id !== e.pointerId) return;
-  dvDrag = null; g.li.classList.remove('dragging');
-  if (!g.moved) return;
-  L.setDayOrder(S, g.ul.dataset.dvday, [...g.ul.querySelectorAll('.dv-r')].map(x => x.dataset.key)); touch();
+  dvDrag = null; cancelAnimationFrame(g.raf);
+  g.ul.insertBefore(g.li, g.ph); g.ph.remove();
+  g.li.classList.remove('dragging'); g.li.removeAttribute('style');
+  const keys = [...g.ul.querySelectorAll('.dv-r')].map(x => x.dataset.key);
+  if (keys.join('|') === g.start.join('|')) return;
+  L.setDayOrder(S, g.ul.dataset.dvday, keys); touch();
 };
 document.addEventListener('pointerup', dvEnd);
 document.addEventListener('pointercancel', dvEnd);
