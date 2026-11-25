@@ -130,10 +130,18 @@ function renderRunbar() {
     <span class="rb-st"><i></i>${STATE[ph]}</span><span class="rb-name">${it ? sw(it.sid) + '<span>' + esc(it.name) + '</span>' : '<span>Sin tareas</span>'}</span><b class="rb-t" id="rbT"></b></button>
     ${b ? `<div class="rb-btns">${b}</div>` : ''}</div>`;
 }
+/* Configuración › General › Cuenta. Arriba solo se avisa si falta entrar. */
+function accountBlock() {
+  let x;
+  if (store.kind === 'firebase' && store.user) x = `<p class="sub">Sincronizado como <b>${esc(store.user.email || store.user.name)}</b>. Lo que cambies aquí se ve en el PC y en el móvil.</p><div class="row-btns"><button type="button" class="btn ghost" data-logout="1">Salir</button></div>`;
+  else if (store.kind === 'firebase' && store.needLogin) x = `<p class="sub">Sin entrar: se guarda solo en este navegador.</p><div class="row-btns"><button type="button" class="btn" data-login="1">Entrar con Google</button></div>`;
+  else if (store.kind === 'claude') x = '<p class="sub">Guardado en Claude.</p>';
+  else x = '<p class="sub">Se guarda solo en este navegador.</p>';
+  return `<section class="card"><h2>Cuenta</h2>${x}</section>`;
+}
 function renderAccount() {
   const el = $('account');
   if (store.kind === 'firebase' && store.needLogin) el.innerHTML = `<span>Entra con tu cuenta de Google para sincronizar el PC y el móvil.</span><button class="btn sm" data-login="1">Entrar con Google</button>`;
-  else if (store.kind === 'firebase' && store.user) el.innerHTML = `<span>Sincronizado como ${esc(store.user.email || store.user.name)}</span><button class="btn ghost sm" data-logout="1">Salir</button>`;
   else el.innerHTML = '';
   el.hidden = !el.innerHTML;
 }
@@ -504,7 +512,7 @@ function renderGeneral(al, ob) {
     <p class="sub">${pct ? 'Primero se cubren los mínimos. El resto del día se reparte con estos porcentajes.' : 'Primero se cubren los mínimos. El resto va a lo más prioritario, y si una fecha límite corre peligro, lo que vence antes pasa delante.'} Cada asignatura es un solo bloque al día y las más importantes van antes.</p>
     ${pct && tw !== 100 ? `<p class="sub neg">Los porcentajes suman ${tw} %. Se reparte en proporción, aunque no sumen 100.</p>` : ''}
     ${rows ? `<div class="ptable">${rows}</div>` : '<div class="empty">Todavía no hay asignaturas. Añádelas con + Añadir.</div>'}
-    ${toggle({key: 'useRitmo', value: !!S.app.useRitmo, label: 'Corregir lo que queda con mi ritmo real'})}</section></div>
+    ${toggle({key: 'useRitmo', value: !!S.app.useRitmo, label: 'Corregir lo que queda con mi ritmo real'})}</section>${accountBlock()}</div>
    <aside class="side"><h2>Cuántas horas añadir</h2>${propsBlock(ob) || '<p class="sub">Añade asignaturas y días para ver el balance.</p>'}
     ${al.late.length ? `<p class="sub neg">${al.late.length} ${al.late.length === 1 ? 'tarea no llega' : 'tareas no llegan'} antes de su fecha límite.</p>` : ''}${warnList(al)}</aside></div>`;
 }
