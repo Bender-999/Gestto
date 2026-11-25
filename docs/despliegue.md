@@ -40,6 +40,26 @@ En la app publicada, el inicio de sesión va por el propio dominio (`la-hoja-157
 
 Más detalle: [Best practices for using signInWithRedirect](https://firebase.google.com/docs/auth/web/redirect-best-practices).
 
+## Avisos de la sesión (una sola vez)
+
+Los avisos de la pantalla de bloqueo («Toca descanso», «Tiempo cumplido», «Se acabó el descanso») los manda la función `avisos` de `functions/index.js`. Corre cada minuto en Cloud Functions, mira la cola `users/<uid>/aviso/cola` que deja la app y manda lo que toca a los dispositivos de `users/<uid>/disp/`.
+
+1. **Plan Blaze.** Cloud Functions pide el plan de pago por uso: consola de Firebase › Uso y facturación › Modificar plan › Blaze. Hay que poner una tarjeta, pero con este uso entra en la parte gratuita (unas 43 000 ejecuciones al mes de 2 millones gratis y un solo trabajo programado de 3 gratis). Pon una alerta de presupuesto de 1 € para quedarte tranquilo.
+2. **Clave privada de los avisos.** No está en el repositorio. Guárdala como secreto:
+   ```bash
+   npx firebase-tools functions:secrets:set VAPID_PRIVATE
+   ```
+   y pega la clave cuando la pida. La pública está en `js/firebase-config.js` y en `functions/index.js`: si cambias una, cambia las dos.
+3. **Publicar la función y el índice:**
+   ```bash
+   cd functions && npm install && cd ..
+   npx firebase-tools deploy --only functions,firestore
+   ```
+   Si pregunta por activar servicios de Google Cloud, di que sí. Si pregunta cuántos días guardar las imágenes de la función, pon 1.
+4. **En cada dispositivo**, abajo del todo: «Activar avisos de la sesión en este dispositivo» y luego «Probar». El aviso de prueba llega en un minuto como mucho. En el iPhone hay que abrir La Hoja desde el icono de la pantalla de inicio (iOS 16.4 o posterior); en Safari normal no se puede.
+
+La función no se publica sola con `main`: si cambias `functions/`, vuelve a ejecutar el paso 3. Los registros están en la consola de Firebase › Functions › avisos › Registros.
+
 ## Instalarla
 
 - **Windows (Edge o Chrome)**: abre https://la-hoja-15712.web.app y pulsa el icono de instalar de la barra de direcciones (o Menú › Aplicaciones › Instalar esta página como aplicación). Queda en el menú Inicio y se puede anclar a la barra de tareas.

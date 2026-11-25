@@ -483,6 +483,35 @@ function clock(S,now,today){
   const it=r&&r.key?findItem(S,r.key,r.day):null;
   return {cur,doM,rev,sDay,bDay,left:it?it.m*60000-doM:0,it};
 }
+/* Avisos de la sesión para la pantalla de bloqueo. Cada 50 min de estudio seguido toca un
+   descanso de 10. Una pausa o un hueco de 10 min o más cuenta como descanso. Devuelve los
+   avisos que quedan por llegar en la fase actual; solo depende del estado, no de la hora. */
+const BRK_EVERY=50,BRK_LEN=10;
+function stint(S){
+  const r=S.app.run,segs=allSegs(S).filter(x=>x.d===r.day&&x.e<=r.since).sort((a,b)=>a.s-b.s);let t=0,last=null;
+  for(const x of segs){
+    if(last!==null&&x.s-last>=BRK_LEN*60000)t=0;
+    if(x.t==='b'||(x.t==='p'&&x.e-x.s>=BRK_LEN*60000))t=0;else if(x.t==='d'||x.t==='r')t+=x.e-x.s;
+    last=x.e;
+  }
+  if(last!==null&&r.since-last>=BRK_LEN*60000)t=0;
+  return t;
+}
+function alerts(S){
+  const r=S.app.run;if(!r)return [];
+  const out=[],it=r.key?findItem(S,r.key,r.day):null,add=(kind,at,title,body)=>out.push({id:kind+'-'+Math.round(at/1000),kind,at,title,body});
+  const what=it?it.subName+' · '+it.name:'';
+  if(r.phase==='do'||r.phase==='review'){
+    const st=stint(S);
+    if(st<BRK_EVERY*60000)add('brk',r.since+BRK_EVERY*60000-st,'Toca descanso','Llevas '+BRK_EVERY+' min estudiando sin parar. Descansa '+BRK_LEN+' min.');
+  }
+  if(r.phase==='do'&&it&&!it.libre&&it.m>0){
+    const left=clock(S,r.since).left;
+    if(left>0)add('tarea',r.since+left,'Tiempo cumplido',what+': ya llevas los '+fmt(it.m)+' previstos.');
+  }
+  if(r.phase==='break')add('fin',r.since+BRK_LEN*60000,'Se acabó el descanso',what?'Vuelve a '+what+'.':'Vuelve al estudio.');
+  return out.sort((a,b)=>a.at-b.at);
+}
 function fmtClock(ms){
   const a=Math.floor(Math.abs(ms)/1000),h=Math.floor(a/3600),m=Math.floor(a/60)%60,x=a%60,p=n=>String(n).padStart(2,'0');
   return (ms<0&&a>0?'−':'')+(h?h+':'+p(m):p(m))+':'+p(x);
@@ -547,4 +576,4 @@ function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {alerts,BRK_EVERY,BRK_LEN,dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};

@@ -662,3 +662,41 @@ body.simple .sp:has(.dv-bar) .dv-r>span:last-child{display:none}
 .sp-ses[data-phase=break] .sp-ses-top .state i{background:var(--exam)}
 .sp-ses[data-phase=pause] .sp-ses-top .state i{background:var(--low)}
 .sp-ses[data-phase=review] .sp-ses-top .state i{background:var(--low)}
+
+/* ---------- Barra de la sesión ----------
+   Fija abajo en las demás pantallas mientras hay una sesión abierta. Tocarla abre la sesión. */
+.runbar{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:0 max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));pointer-events:none}
+.rb{pointer-events:auto;max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 10px 10px 18px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-xl);box-shadow:var(--shadow)}
+.rb-info{flex:1;min-width:0;min-height:44px;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"st t" "nm t";gap:3px 14px;align-items:center;padding:2px 0;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.rb-st{grid-area:st;display:inline-flex;align-items:center;gap:8px;font:600 11px/1 var(--f-data);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rb-st i{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+.rb[data-phase=review] .rb-st i{background:var(--exam)}
+.rb[data-phase=break] .rb-st i{background:var(--low);border-radius:2px}
+.rb[data-phase=pause] .rb-st i{background:var(--muted);border-radius:2px}
+.rb[data-phase=free] .rb-st i{background:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.rb[data-phase=do] .rb-st i,.rb[data-phase=review] .rb-st i{animation:lat 1.6s ease-in-out infinite}}
+.rb-name{grid-area:nm;display:flex;align-items:center;gap:8px;min-width:0;font-weight:600;font-size:15px;line-height:1.25}
+.rb-name>span:last-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.rb-name .sw{flex:none}
+.rb-t{grid-area:t;font:600 30px/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.rb-t.over{color:var(--over)}
+.rb[data-phase=pause] .rb-t{opacity:.55}
+.rb-btns{display:flex;gap:8px;flex:none}
+.rb-btns .btn{min-height:44px;padding:8px 18px;border-radius:999px;font-weight:600}
+.rb[data-phase=break] .rb-btns .btn:not(.alt){background:var(--low)}
+.rb[data-phase=pause] .rb-btns .btn:not(.alt){background:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.rb-in{animation:rbIn .28s cubic-bezier(.2,.8,.2,1)}}
+@keyframes rbIn{from{transform:translateY(24px);opacity:0}}
+body.has-runbar{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body:has(.dv-bar) .runbar,body:has(.modal-bg) .runbar{display:none}
+@media (max-width:640px){
+  .rb{flex-wrap:wrap;gap:10px;padding:12px 12px 12px 16px}
+  .rb-info{flex-basis:100%}
+  .rb-btns{flex:1}
+  .rb-btns .btn{flex:1}
+  body.has-runbar{padding-bottom:calc(136px + env(safe-area-inset-bottom,0px))}
+}
+
+/* Avisos en este dispositivo (pie de la página). */
+.mode-switch{flex-direction:column;align-items:center;gap:12px}
+.push-opt{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 10px;max-width:520px;font-size:13px;color:var(--muted);text-align:center}

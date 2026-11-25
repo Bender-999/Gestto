@@ -6,6 +6,7 @@ import * as L from './logic.js';
 import {SAMPLE} from './sample.js';
 import {PROMPT} from './prompt.js';
 import {openStore} from './storage.js';
+import {pushState, pushOn, pushOff, pushRefresh} from './push.js';
 import {esc, stepper, seg, chips, blocks, toggle, datePick, menu, slotsTrack, axis, bindSlots, parseHM, hm, slotWithHours, longDate} from './controls.js';
 
 const {LV, fmt, dec, nh, hh, toTime, toMin, allocate, objectives, subState, buildItems, dayBlocks, makeDay, slotsHours, studyHours} = L;
@@ -29,6 +30,8 @@ let pick = null, pickMonth = null, menuOpen = null, slotEdit = null, dayPop = nu
 const UIK = 'la-hoja-ui';
 const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
 const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
+if (!uiPref.dev) {uiPref.dev = Math.random().toString(36).slice(2, 10); saveUi()} /* Identifica este dispositivo para los avisos. */
+let pushSt = 'no', pushBusy = false;
 let chartN = [3, 7, 10, 14].includes(uiPref.n) ? uiPref.n : (innerWidth < 640 ? 7 : 14), chartStart = TODAY, chartAnim = '';
 let dayView = null, doneAsk = null, moveAsk = null, selMode = false, selAsk = null;
 const sel = new Set();
@@ -40,11 +43,11 @@ let store = {kind: 'local'};
 function render() {
   const a = document.activeElement && document.activeElement.id, al = allocate(S, TODAY);
   document.body.classList.toggle('simple', !!uiPref.simple);
-  $('modeSwitch').innerHTML = uiPref.simple ? '<button type="button" class="btn ghost sm" data-simple="off">Versión completa</button>' : '<button type="button" class="btn ghost sm" data-simple="on">Usar la versión simplificada en este dispositivo</button>';
+  $('modeSwitch').innerHTML = (uiPref.simple ? '<button type="button" class="btn ghost sm" data-simple="off">Versión completa</button>' : '<button type="button" class="btn ghost sm" data-simple="on">Usar la versión simplificada en este dispositivo</button>') + pushBlock();
   if (uiPref.simple) {
     ['headblock', 'chart', 'scopes', 'tabs'].forEach(id => {$(id).hidden = true});
     $('overlay').innerHTML = '';
-    renderSimple(al); renderAccount(); tick();
+    renderSimple(al); renderAccount(); renderRunbar(); tick();
     if (a && $(a) && $(a) !== document.activeElement) $(a).focus();
     return;
   }
@@ -63,7 +66,7 @@ function render() {
   else if (scope === 'general') renderGeneral(al, ob);
   else renderSubject(al, ob);
   $('overlay').innerHTML = view === 'sesion' || scope === 'nueva' ? '' : dayViewModal(al);
-  renderAccount();
+  renderAccount(); renderRunbar();
   tick();
   if (a && $(a) && $(a) !== document.activeElement) $(a).focus();
   if (slotEdit && slotEdit.focus) {const i = $('slotEditTxt'); if (i) {i.focus(); i.select()} slotEdit.focus = false}
@@ -74,6 +77,36 @@ function renderScopes() {
     S.app.order.map(id => {const w = subState(S, S.subs[id], TODAY); return `<button class="scope ${w === 'espera' || w === 'pausa' ? 'wait' : ''}" data-scope="${esc(id)}" aria-pressed="${scope === id}">${sw(id)}${esc(S.subs[id].nombre)}</button>`}).join('') +
     `<button class="scope add" data-scope="nueva" aria-pressed="${scope === 'nueva'}">+ Añadir</button>`;
   if (!n) $('scopes').querySelector('[data-scope=general]').hidden = false;
+}
+/* Avisos en este dispositivo: solo con la cuenta de Google (Firebase). */
+function pushBlock() {
+  if (store.kind !== 'firebase' || !store.user || pushSt === 'no') return '';
+  let x;
+  if (pushBusy) x = '<span>Un momento…</span>';
+  else if (pushSt === 'on') x = '<span>Avisos de la sesión activados</span><button type="button" class="btn ghost sm" data-push="test">Probar</button><button type="button" class="btn ghost sm" data-push="off">Desactivar</button>';
+  else if (pushSt === 'off') x = '<button type="button" class="btn ghost sm" data-push="on">Activar avisos de la sesión en este dispositivo</button>';
+  else if (pushSt === 'denied') x = '<span>Los avisos están bloqueados. Permítelos en los ajustes del sistema para La Hoja.</span>';
+  else if (pushSt === 'install') x = '<span>Para recibir avisos, abre La Hoja desde su icono en la pantalla de inicio.</span>';
+  return `<div class="push-opt">${x}</div>`;
+}
+/* Barra de la sesión: se ve en las demás pantallas mientras hay una sesión abierta. */
+function renderRunbar() {
+  const r = S.app.run, el = $('runbar'), onSes = uiPref.simple ? sp === 'sesion' : view === 'sesion';
+  const show = !!r && !onSes && scope !== 'nueva';
+  const enter = show && !document.body.classList.contains('has-runbar');
+  document.body.classList.toggle('has-runbar', show);
+  if (!show) {el.innerHTML = ''; el.hidden = true; return}
+  const it = r.key ? L.findItem(S, r.key, r.day) : null, ph = r.phase, base = ph === 'break' ? r.back : ph;
+  const lbl = base === 'review' ? 'Revisada' : it && it.rev ? 'A revisar' : 'Hecha';
+  const B = (act, t, cls = '') => `<button type="button" class="btn ${cls}" data-act="${act}">${t}</button>`;
+  let b = '';
+  if (ph === 'pause') b = B('unpause', 'Reanudar');
+  else if (ph === 'break') b = B('resume', 'Reanudar') + B('next', lbl, 'alt');
+  else if (ph === 'do' || ph === 'review') b = B('break', 'Descanso', 'alt') + B('next', lbl);
+  el.hidden = false;
+  el.innerHTML = `<div class="rb${enter ? ' rb-in' : ''}" data-phase="${ph}"><button type="button" class="rb-info" data-runbar="1" aria-label="Abrir la sesión">
+    <span class="rb-st"><i></i>${STATE[ph]}</span><span class="rb-name">${it ? sw(it.sid) + '<span>' + esc(it.name) + '</span>' : '<span>Sin tareas</span>'}</span><b class="rb-t" id="rbT"></b></button>
+    ${b ? `<div class="rb-btns">${b}</div>` : ''}</div>`;
 }
 function renderAccount() {
   const el = $('account');
@@ -254,7 +287,7 @@ function renderSimpleDay(al) {
   const pct = p.tot ? Math.round(100 * doneM / p.tot) : 0, dt = new Date(d + 'T00:00:00Z');
   const wd = dt.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'long'});
   let cta = '';
-  if (r) cta = `<button type="button" class="sp-cta" data-sp="sesion">Volver a la sesión</button>`;
+  if (r) cta = '';
   else if (isToday && !p.closed && p.x) cta = `<button type="button" class="sp-cta" data-act="go">Empezar sesión</button>`;
   else if (isToday && !p.x) cta = `<button type="button" class="sp-cta" data-act="go">Empezar sesión</button><p class="sub sp-note">Hoy no está entre tus días. Al empezar se añade con tu horario.</p>`;
   else if (isToday && p.closed) cta = `<button type="button" class="sp-cta alt" data-sp="resumen" data-day="${d}">Ver el resumen de hoy</button><button type="button" class="btn ghost sp-wide" data-act="go">Seguir estudiando hoy</button>`;
@@ -573,7 +606,12 @@ function renderSession(al) {
 }
 function tick() {
   const r = S.app.run, now = Date.now(), b = $('startBtn');
-  b.textContent = r ? 'Volver a la sesión' : 'Empezar día'; b.hidden = view === 'sesion';
+  b.textContent = 'Empezar día'; b.hidden = view === 'sesion' || !!r;
+  if (r && $('rbT')) {
+    const c = L.clock(S, now, TODAY), lib = c.it && c.it.libre, base = r.phase === 'pause' ? r.pb.phase : r.phase;
+    const t = base === 'do' ? (lib ? c.doM : c.left) : base === 'review' ? c.rev : c.cur;
+    $('rbT').textContent = L.fmtClock(t); $('rbT').classList.toggle('over', base === 'do' && !lib && c.left < 0);
+  }
   if (!r || !$('bigT')) return;
   const c = L.clock(S, now, TODAY); let big = 0, sub = '', over = false;
   const lib = c.it && c.it.libre, base = r.phase === 'pause' ? r.pb.phase : r.phase;
@@ -617,6 +655,14 @@ function docs() {
   for (const k of Object.keys(S.log)) o['log/' + k] = {segs: S.log[k]};
   return o;
 }
+/* Cola de avisos para la función «avisos»: solo cambia cuando cambia la sesión. */
+let alertsJ = null;
+function syncAlerts() {
+  if (store.kind !== 'firebase' || !db) return;
+  const items = L.alerts(S).filter(x => x.at > Date.now() - 10 * 60000), j = JSON.stringify(items);
+  if (j === alertsJ) return; alertsJ = j;
+  db.doc('aviso/cola').set({items, next: items.length ? items[0].at : null}, {merge: true});
+}
 function setStatus(t) {$('status').textContent = t}
 const LS = 'hoja-carga'; /* Clave de los datos en localStorage: no cambiarla aunque cambie el nombre de la app. */
 function lsGet() {try {return JSON.parse(localStorage.getItem(LS) || localStorage.getItem('hoja') || 'null')} catch (e) {return null}}
@@ -631,6 +677,7 @@ async function flush() {
     const d = docs();
     for (const p of Object.keys(d)) {const j = JSON.stringify(d[p]); if (saved[p] !== j) {await db.doc(p).set(JSON.parse(j)); saved[p] = j}}
     for (const p of Object.keys(saved)) if (!d[p]) {await db.doc(p).delete(); delete saved[p]}
+    syncAlerts();
     setStatus(store.kind === 'firebase' ? 'Guardado y sincronizado.' : 'Guardado.');
   } catch (e) {lsSet(); setStatus(e && e.code === 'quota_exceeded' ? 'Sin espacio. Elimina asignaturas antiguas.' : 'No se ha podido guardar. Los cambios siguen en esta pantalla.')}
   saving = false;
@@ -747,6 +794,17 @@ document.addEventListener('click', e => {
   if (d.sp) {sp = d.sp; if (d.day) spSum = d.day; spMore = false; showExtra = false; parar = false; if (sp === 'dia' && !dayView) dayView = TODAY; scrollTo(0, 0); render(); return}
   if (d.spgo !== undefined) {const k = +d.spgo; spGo(k === 0 ? TODAY : L.addDays(dayView || TODAY, k), k === 0 ? (dayView > TODAY ? -1 : 1) : k); return}
   if (d.spmore) {spMore = !spMore; render(); return}
+  if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
+  if (d.push) {
+    if (pushBusy || !db) return;
+    if (d.push === 'test') {const now = Date.now(); db.doc('aviso/prueba').set({items: [{id: 'prueba-' + now, kind: 'prueba', at: now, title: 'Prueba de La Hoja', body: 'Los avisos llegan a este dispositivo.'}], next: now}); setStatus('Aviso de prueba pedido. Llega en un minuto como mucho.'); return}
+    pushBusy = true; render();
+    (d.push === 'on' ? pushOn(db, uiPref.dev) : pushOff(db, uiPref.dev))
+      .then(st => {pushSt = st; if (st === 'on') setStatus('Avisos activados. Pulsa Probar para comprobarlo.')})
+      .catch(e => {console.error(e); setStatus('No se han podido activar los avisos en este dispositivo.')})
+      .finally(() => {pushBusy = false; render()});
+    return;
+  }
   if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
   if (d.chnav !== undefined) {const k = +d.chnav; if (k === 0) {chartAnim = chartStart > TODAY ? 'from-l' : 'from-r'; chartStart = TODAY} else {chartStart = L.addDays(chartStart, k * chartN); chartAnim = k > 0 ? 'from-r' : 'from-l'} render(); return}
   if (d.dayview) {dayView = d.dayview; doneAsk = null; moveAsk = null; pick = null; exitSel(); render(); return}
@@ -973,6 +1031,7 @@ export async function start() {
     render(); setStatus(store.warn || (store.needLogin ? 'Sin entrar: se guarda solo en este navegador.' : 'Se guarda solo en este navegador.')); return;
   }
   db = store.db; let first = true;
+  if (store.kind === 'firebase' && store.user) pushState().then(st => {pushSt = st; if (st === 'on') pushRefresh(db, uiPref.dev); render()}).catch(() => {});
   const slow = setTimeout(() => setStatus('Aún no llega lo guardado. Puede estar desactualizado.'), 10000);
   const apply = () => {if (first && S.app.run) {view = 'sesion'; sp = 'sesion'} render()};
   const busy = m => dirty || saving || m.hasPendingWrites;
