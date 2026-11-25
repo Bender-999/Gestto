@@ -29,6 +29,9 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Estética | Se mantienen la paleta y las tipografías. Todo redondeado: «tan cuadrado se ve antiguo» |
 | Controles | Nada de desplegables, campos numéricos ni selectores de hora nativos. Se usan botones − y +, fichas, bloques, interruptores, un calendario y un desplegable propios |
 | Horario | Varias franjas por día. Doble clic en un hueco añade una franja, arrastrar la mueve y los bordes la alargan. Doble clic sobre una franja abre sus horas de estudio en hh:mm, donde también se borra. Sin botones de inicio y fin |
+| Marcar hecha a mano | Desde la ventana del día se elige qué día se hizo: hoy, el día planificado, ayer u otro día |
+| Mover tareas | «Mover» fija la tarea en otro día de estudio: el plan la respeta y reparte lo demás alrededor; si no cabe entera, lo que sobra va al siguiente hueco. «Soltar» la devuelve al reparto automático. Dentro de un día se reordena arrastrando, y se puede intercalar asignaturas |
+| Gráfico de días | 3, 7, 10 o 14 días (se recuerda en cada dispositivo), botones ‹ Hoy › con animación y sin barra de desplazamiento. Meses separados con su nombre, hoy remarcado, fines de semana sombreados, hueco libre rayado, nombre de la asignatura en cada tramo y una sola cifra por día. Tocar un día abre su ventana |
 | Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
 | Tus días | Sin lista de días: solo el calendario. Un clic añade o quita el día, dejar el cursor encima (o mantener pulsado en el móvil) muestra su ficha (horas, franjas, plan por asignatura y fechas límite) y doble clic abre una ventana para editar sus franjas |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |

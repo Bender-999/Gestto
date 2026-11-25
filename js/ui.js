@@ -25,6 +25,12 @@ const hTxt = x => nh(x) + ' h';
 let S = L.newState(), view = 'config', scope = 'general', expanded = new Set(), undo = null, month = TODAY.slice(0, 7);
 let draft = {text: '', res: null, diffs: null}, confirmDel = false, props = null, parar = false, showExtra = false, planAdd = false, formErr = '';
 let pick = null, pickMonth = null, menuOpen = null, slotEdit = null, dayPop = null;
+/* Gráfico de días: preferencias de este dispositivo (cuántos días se ven). */
+const UIK = 'la-hoja-ui';
+const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
+const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
+let chartN = [3, 7, 10, 14].includes(uiPref.n) ? uiPref.n : (innerWidth < 640 ? 7 : 14), chartStart = TODAY, chartAnim = '';
+let dayView = null, doneAsk = null, moveAsk = null;
 let ma = {sid: '', nom: '', min: 30, pri: 1}, ex = {sid: '', nom: ''};
 let store = {kind: 'local'};
 
@@ -44,6 +50,7 @@ function render() {
   else if (view === 'datos') renderData();
   else if (scope === 'general') renderGeneral(al, ob);
   else renderSubject(al, ob);
+  $('overlay').innerHTML = view === 'sesion' || scope === 'nueva' ? '' : dayViewModal(al);
   renderAccount();
   tick();
   if (a && $(a) && $(a) !== document.activeElement) $(a).focus();
@@ -79,26 +86,100 @@ function renderHead(al, ob) {
       $('lead').textContent = `Tu objetivo llega hasta ${o.t.name} y pide ${fmt(o.need)}.` + (s.limites&&s.limites.length>1?' Fechas: '+s.limites.map(l=>l.nombre+' '+dayLabel(l.fecha)).join(', ')+'.' : s.limite?` Fecha límite: ${dayLabel(s.limite)}.`:'');
     }
   }
-  const open = al.days.filter(d => !d.closed), maxM = Math.max(60, ...open.map(d => Math.max(d.h * 60, al.plan[d.d].reduce((a, r) => a + r.m, 0))));
-  const short = m => nh(Math.round(m / 15) / 4);
-  const seen = new Set();
-  const cols = open.map(d => {
-    const by = {};
-    al.plan[d.d].forEach(r => {by[r.it.sid] = (by[r.it.sid] || 0) + r.m});
-    const rows = [...new Set(al.plan[d.d].map(r => r.it.sid))], tot = Object.values(by).reduce((a, b) => a + b, 0), base = Math.max(d.h * 60, tot, 1);
-    const segs = rows.map(id => {
-      const m = by[id], mine = scope === 'general' || id === scope; seen.add(id);
-      const nm = S.subs[id] ? S.subs[id].nombre : id, tall = m / maxM * 132 >= 20;
-      return `<i style="height:${100 * m / base}%;background:${mine ? colorOf(id) : 'var(--line)'};color:${mine ? 'var(--bg)' : 'var(--muted)'}" title="${esc(nm)}: ${fmt(m)}">${tall ? short(m) : ''}</i>`;
-    }).join('');
-    const x = new Date(d.d + 'T00:00:00Z'), lab = x.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'short'}).replace('.', '');
-    const own = scope === 'general' ? tot : (by[scope] || 0);
-    return `<div class="dc" title="${dayLabel(d.d)}: ${fmt(tot)} de ${fmt(d.h * 60)}"><b>${scope === 'general' ? fmt(tot) : (own ? fmt(own) : '—')}</b><div class="dtrack" style="height:${Math.max(6, 132 * Math.max(d.h * 60, tot) / maxM)}px">${segs}</div><span>${lab}<br>${x.getUTCDate()}/${x.getUTCMonth() + 1}</span></div>`;
-  }).join('');
-  const legend = [...seen].sort((a, b) => S.app.order.indexOf(a) - S.app.order.indexOf(b)).filter(id => scope === 'general' || id === scope).map(id => `<span>${sw(id)}${esc(S.subs[id].nombre)}</span>`).join('') + (scope === 'general' ? '' : '<span><span class="sw" style="background:var(--line)"></span>Otras asignaturas</span>') + '<span><span class="sw" style="background:var(--track);box-shadow:inset 0 0 0 1px var(--line)"></span>Libre</span>';
-  const miss = ob.list.filter(o => o.miss > 0 && (scope === 'general' || o.sid === scope)).map(o => `${esc(o.s.nombre)} ${fmt(o.miss)}`).join(' · ');
-  $('chart').innerHTML = open.length ? `<div class="dcols-wrap"><div class="dcols">${cols}</div></div><div class="legend">${legend}${miss ? `<span class="neg"><span class="sw hatch"></span>Sin sitio: ${miss}</span>` : ''}</div>` : '<div class="empty">Añade días para ver el reparto de horas.</div>';
+  renderChart(al, ob);
 }
+/* ---------- Gráfico de días ---------- */
+const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const WD = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+function groupRows(rows) {
+  const out = [];
+  for (const r of rows) {
+    const l = out[out.length - 1];
+    if (l && l.sid === r.it.sid && l.done === !!r.done) l.m += r.m;
+    else out.push({sid: r.it.sid, done: !!r.done, m: r.m});
+  }
+  return out;
+}
+function renderChart(al, ob) {
+  const n = chartN, dates = [...Array(n)].map((_, i) => L.addDays(chartStart, i)), byDay = {};
+  al.days.forEach(x => {byDay[x.d] = x});
+  const H = 170, seen = new Set();
+  const info = dates.map(d => {
+    const x = byDay[d], rows = al.plan[d] || [], tot = rows.reduce((a, r) => a + r.m, 0), cap = x ? x.h * 60 : 0;
+    const free = x && !x.closed ? Math.max(0, al.rem[d] || 0) : 0;
+    return {d, x, rows, tot, cap, free};
+  });
+  const maxM = Math.max(60, ...info.map(o => Math.max(o.cap, o.tot)));
+  const col = o => {
+    const dt = new Date(o.d + 'T00:00:00Z'), wd = dt.getUTCDay(), we = wd === 0 || wd === 6, today = o.d === TODAY;
+    const mine = id => scope === 'general' || id === scope;
+    const segs = groupRows(o.rows).map(g => {
+      seen.add(g.sid);
+      const h = g.m / maxM * H, nm = S.subs[g.sid] ? S.subs[g.sid].nombre : g.sid;
+      return `<i class="sg ${g.done ? 'done' : ''}" style="height:${h.toFixed(1)}px;background:${mine(g.sid) ? colorOf(g.sid) : 'var(--line)'}" title="${esc(nm)}: ${fmt(g.m)}${g.done ? ' (hecho)' : ''}">${h >= 20 && mine(g.sid) ? `<em>${esc(nm)}</em>` : ''}</i>`;
+    }).join('');
+    const freeH = o.free / maxM * H;
+    const own = scope === 'general' ? o.tot : o.rows.filter(r => r.it.sid === scope).reduce((a, r) => a + r.m, 0);
+    const hm2 = m => Math.floor(m / 60) + ':' + String(Math.round(m % 60)).padStart(2, '0');
+    const top = own ? `<span class="f">${fmt(own)}</span><span class="s">${hm2(own)}</span>` : o.tot ? '—' : o.x ? (o.x.closed ? '' : 'libre') : '';
+    const lbl = `${dayLabel(o.d, {weekday: 'long', month: 'long'})}: ${o.x ? fmt(o.tot) + ' de ' + fmt(o.cap) : 'sin estudio'}`;
+    return `<button type="button" class="dch-col ${today ? 'today' : ''} ${we ? 'we' : ''} ${o.x ? '' : 'off'} ${o.x && o.x.closed ? 'past' : ''}" data-dayview="${o.d}" aria-label="${esc(lbl)}" title="${esc(lbl)}">
+      <span class="dch-top">${top}</span>
+      <span class="dch-bar" style="height:${Math.max(o.x ? 8 : 4, (Math.max(o.cap, o.tot) / maxM * H)).toFixed(1)}px">${freeH >= 1 ? `<i class="sg free" style="height:${freeH.toFixed(1)}px">${freeH >= 18 && n <= 10 ? '<em>libre</em>' : ''}</i>` : ''}${segs}</span>
+      <span class="dch-d"><b>${today ? 'Hoy' : WD[wd]}</b>${dt.getUTCDate()}</span></button>`;
+  };
+  const groups = [];
+  info.forEach(o => {const m = o.d.slice(0, 7), l = groups[groups.length - 1]; if (l && l.m === m) l.list.push(o); else groups.push({m, list: [o]})});
+  const body = groups.map(g => {const [y, m] = g.m.split('-').map(Number); return `<div class="dch-m" style="flex:${g.list.length}"><div class="dch-mh">${MES[m - 1]}${y !== +TODAY.slice(0, 4) ? ' ' + y : ''}</div><div class="dch-cols">${g.list.map(col).join('')}</div></div>`}).join('');
+  const last = dates[dates.length - 1], rng = `${dayLabel(dates[0], {weekday: undefined})} – ${dayLabel(last, {weekday: undefined})}`;
+  const legend = [...seen].filter(id => scope === 'general' || id === scope).sort((a, b) => S.app.order.indexOf(a) - S.app.order.indexOf(b)).map(id => `<span>${sw(id)}${esc(S.subs[id] ? S.subs[id].nombre : id)}</span>`).join('') +
+    (scope === 'general' ? '' : '<span><span class="sw" style="background:var(--line)"></span>Otras</span>') +
+    '<span><span class="sw free"></span>Libre</span><span><span class="sw donesw"></span>Hecho</span>';
+  const miss = ob.list.filter(o => o.miss > 0 && (scope === 'general' || o.sid === scope)).map(o => `${esc(o.s.nombre)} ${fmt(o.miss)}`).join(' · ');
+  $('chart').innerHTML = `<div class="dch-nav"><div class="dch-btns"><button type="button" class="icon round" data-chnav="-1" aria-label="Días anteriores">‹</button><button type="button" class="btn ghost sm" data-chnav="0" ${chartStart === TODAY ? 'disabled' : ''}>Hoy</button><button type="button" class="icon round" data-chnav="1" aria-label="Días siguientes">›</button><span class="dch-rng">${rng}</span></div>
+    ${seg({key: 'chartN', value: n, size: 'sm', label: 'Días que se ven', options: [3, 7, 10, 14].map(v => ({v, label: v + ' días'}))})}</div>
+    <div class="dch-win ${chartAnim} n${n}">${body}</div>
+    <div class="legend">${legend}${miss ? `<span class="neg"><span class="sw hatch"></span>Sin sitio: ${miss}</span>` : ''}<span class="hint">Toca un día para ver y mover sus tareas.</span></div>`;
+  chartAnim = '';
+}
+
+/* ---------- Ventana de un día ---------- */
+function dayViewModal(al) {
+  const d = dayView; if (!d) return '';
+  const x = S.app.days.find(y => y.d === d), rows = al.plan[d] || [], past = d < TODAY, closed = !!S.app.closed[d];
+  const tot = rows.reduce((a, r) => a + r.m, 0), free = x && !past && !closed ? Math.max(0, al.rem[d] || 0) : 0;
+  const slots = x && x.slots && x.slots.length ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : '';
+  const study = new Set(S.app.days.filter(y => y.d >= TODAY && !S.app.closed[y.d]).map(y => y.d));
+  const item = r => {
+    const it = r.it, k = it.key, nm = it.name + (it.extra ? ' · fuera del plan' : ''), part = r.part ? ` · parte ${r.part}/${r.parts}` : '';
+    let ask = '';
+    if (doneAsk === k) {
+      const opts = [{v: TODAY, label: 'Hoy'}];
+      if (d !== TODAY) opts.push({v: d, label: dayLabel(d, {weekday: 'short', month: undefined})});
+      const ay = L.addDays(TODAY, -1); if (ay !== d) opts.push({v: ay, label: 'Ayer'});
+      ask = `<li class="dv-ask"><span class="lbl">¿Qué día la hiciste?</span>${chips({key: 'doneOn', id: k, value: '', options: opts, label: 'Día en que la hiciste'})}
+        ${datePick({key: 'doneOn', id: k, value: '', open: pick === 'doneOn|' + k, month: pickMonth, today: TODAY, label: 'Otro día', empty: 'Otro día…', allowed: v => v <= TODAY, foot: ''})}
+        <button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></li>`;
+    } else if (moveAsk === k) {
+      ask = `<li class="dv-ask"><span class="lbl">Mover a otro día de estudio${it.pinned ? ` · ahora fijada el ${dayLabel(it.pinned)}` : ''}</span>
+        ${datePick({key: 'moveTo', id: k, value: it.pinned || '', inline: true, month: pickMonth, today: TODAY, label: 'Mover a', allowed: v => study.has(v), marks: Object.fromEntries([...study].map(v => [v, 1])), foot: ''})}
+        <div class="row-btns">${it.pinned ? `<button type="button" class="btn ghost sm" data-dvunpin="${esc(k)}">Soltar: que la coloque el plan</button>` : ''}<button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></div></li>`;
+    }
+    return `<li class="dv-r ${r.done ? 'done' : ''}" data-key="${esc(k)}">
+      <button type="button" class="dv-chk" data-dvdone="${esc(k)}" aria-pressed="${!!r.done}" aria-label="${r.done ? 'Desmarcar ' : 'Marcar hecha '}${esc(it.name)}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg></button>
+      ${!past && !r.done ? `<span class="dv-h" data-dvdrag="1" title="Arrastra para cambiar el orden" aria-hidden="true"><svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><circle cx="3" cy="3" r="1.6"/><circle cx="9" cy="3" r="1.6"/><circle cx="3" cy="9" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="3" cy="15" r="1.6"/><circle cx="9" cy="15" r="1.6"/></svg></span>` : '<span class="dv-h off"></span>'}
+      <span class="dv-t"><b>${sw(it.sid)}${esc(nm)}</b><small>${esc(it.subName)} · ${fmt(r.m)}${part}${it.pinned === d ? ' · <span class="pin">Fija</span>' : ''}${r.done ? ' · hecha' : ''}</small></span>
+      ${!r.done && !past ? `<button type="button" class="btn ghost sm" data-dvmove="${esc(k)}" aria-expanded="${moveAsk === k}">Mover</button>` : ''}</li>${ask}`;
+  };
+  const prev = L.addDays(d, -1), next = L.addDays(d, 1);
+  return `<div class="modal-bg" data-modalbg="dv"><div class="modal dv" role="dialog" aria-modal="true" aria-label="${esc(dayLabel(d, {weekday: 'long', month: 'long'}))}">
+    <div class="modal-h"><button type="button" class="icon round" data-dvgo="${prev}" aria-label="Día anterior">‹</button><h3>${dayLabel(d, {weekday: 'long', month: 'long'})}${d === TODAY ? ' · hoy' : ''}</h3><button type="button" class="icon round" data-dvgo="${next}" aria-label="Día siguiente">›</button><button type="button" class="icon round" data-dvclose="1" aria-label="Cerrar">×</button></div>
+    <p class="sub">${x ? `${fmt(tot)} planificadas de ${fmt(x.h * 60)}${slots ? ' · ' + slots : ''}${closed ? ' · terminado' : ''}` : 'No es uno de tus días de estudio.'}</p>
+    ${rows.length ? `<ul class="dv-list" data-dvday="${d}">${rows.map(item).join('')}</ul><p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para cambiar el orden. «Mover» la fija en otro día.</p>` : `<div class="empty">${x ? 'No hay tareas este día.' : past ? 'Día pasado sin estudio.' : 'Añádelo para que el plan le reparta tareas.'}</div>`}
+    <div class="modal-f">${free ? `<span class="sub">Libre: ${fmt(free)}</span>` : '<span></span>'}<div class="row-btns">${x && !past ? `<button type="button" class="btn ghost sm" data-dvslots="${d}">Editar franjas</button>` : ''}${!x && !past ? `<button type="button" class="btn sm" data-dvadd="${d}">Añadir este día</button>` : ''}<button type="button" class="btn sm" data-dvclose="1">Listo</button></div></div>
+  </div></div>`;
+}
+
 function renderWelcome() {
   $('main').innerHTML = `<section><div class="empty"><p>Aún no tienes asignaturas. Pulsa <b>+ Añadir</b>, copia el prompt, pásalo a tu IA con tus materiales y pega el resultado. Luego lo ajustas en Configuración y aparece en Plan, Sesión y Mis datos.</p></div>
    <div class="row-btns"><button class="btn" data-goadd="1">Añadir la primera</button><button class="btn ghost" data-sample="1">Probar con Estructuras de ejemplo</button></div></section>`;
@@ -456,6 +537,9 @@ function applySet(key, id, val, el) {
     case 'maMin': ma.min = n; render(); return;
     case 'maPri': ma.pri = n; render(); return;
     case 'exSub': ex.sid = val; render(); return;
+    case 'chartN': chartN = n; uiPref.n = n; saveUi(); render(); return;
+    case 'doneOn': {const it = L.findItem(S, id, TODAY); if (it) L.markDone(S, it, val, +S.subs[it.sid].real[it.key] || 0); doneAsk = null; pick = null; break}
+    case 'moveTo': {L.pinTask(S, id, val); moveAsk = null; pick = null; setStatus('Tarea fijada el ' + dayLabel(val) + '.'); break}
     case 'switchTask': menuOpen = null; L.switchTask(S, val, Date.now()); commit(); return;
     default: return;
   }
@@ -496,6 +580,7 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Escape') {e.preventDefault(); slotEdit = null; render()}
   } else if (e.key === 'Escape' && (pick || menuOpen || slotEdit)) {pick = null; menuOpen = null; slotEdit = null; render()}
   else if (e.key === 'Escape' && dayPop) {dayPop = null; render()}
+  else if (e.key === 'Escape' && dayView) {if (doneAsk || moveAsk) {doneAsk = moveAsk = null} else dayView = null; render()}
 });
 document.addEventListener('change', e => {
   const el = e.target, d = el.dataset, num = parseFloat(el.value);
@@ -509,6 +594,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('click', e => {
   if ((pick && !e.target.closest('.dp')) || (menuOpen && !e.target.closest('.mn'))) {pick = null; menuOpen = null; render(); if (!e.target.closest('button')) return}
+  if (e.target.dataset && e.target.dataset.modalbg === 'dv') {dayView = null; doneAsk = moveAsk = null; pick = null; render(); return}
   if (dayPop && e.target.dataset && e.target.dataset.modalbg) {dayPop = null; slotEdit = null; render(); return}
   if (slotEdit && !e.target.closest('.slot-pop') && !e.target.closest('.slot')) {slotEdit = null; render(); return}
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
@@ -521,6 +607,16 @@ document.addEventListener('click', e => {
   if (d.slot === 'cancel') {slotEdit = null; render(); return}
   if (d.slot === 'del') {const sl = getSlots(slotEdit.sk).filter((_, k) => k !== slotEdit.j); setSlots(slotEdit.sk, sl); return}
   if (d.dayclose) {dayPop = null; slotEdit = null; render(); return}
+  if (d.chnav !== undefined) {const k = +d.chnav; if (k === 0) {chartAnim = chartStart > TODAY ? 'from-l' : 'from-r'; chartStart = TODAY} else {chartStart = L.addDays(chartStart, k * chartN); chartAnim = k > 0 ? 'from-r' : 'from-l'} render(); return}
+  if (d.dayview) {dayView = d.dayview; doneAsk = null; moveAsk = null; pick = null; render(); return}
+  if (d.dvclose) {dayView = null; doneAsk = moveAsk = null; pick = null; render(); return}
+  if (d.dvgo) {dayView = d.dvgo; doneAsk = moveAsk = null; pick = null; render(); return}
+  if (d.dvcancel) {doneAsk = moveAsk = null; pick = null; render(); return}
+  if (d.dvdone) {const it = L.findItem(S, d.dvdone, TODAY); if (it && it.done) {L.unmarkDone(S, it); touch()} else {doneAsk = doneAsk === d.dvdone ? null : d.dvdone; moveAsk = null; pick = null; pickMonth = TODAY.slice(0, 7); render()} return}
+  if (d.dvmove) {moveAsk = moveAsk === d.dvmove ? null : d.dvmove; doneAsk = null; pick = null; pickMonth = dayView.slice(0, 7); render(); return}
+  if (d.dvunpin) {L.pinTask(S, d.dvunpin, ''); moveAsk = null; touch(); return}
+  if (d.dvslots) {dayPop = d.dvslots; dayView = null; render(); return}
+  if (d.dvadd) {if (!S.app.days.some(y => y.d === d.dvadd)) S.app.days.push(makeDay(S.app, d.dvadd)); touch(); return}
   if (d.dayreset) {const i = S.app.days.findIndex(y => y.d === d.dayreset); if (i >= 0) S.app.days[i] = makeDay(S.app, d.dayreset); slotEdit = null; touch(); return}
   if (d.login) {store.login && store.login(); return}
   if (d.logout) {store.logout && store.logout(); return}
@@ -628,6 +724,29 @@ document.addEventListener('pointerdown', e => {
 ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, e => {if (e.pointerType !== 'mouse') clearTimeout(tipTimer)}));
 addEventListener('scroll', () => {if (!tip.hidden && !tipSuppress) hideTip()}, {passive: true});
 document.addEventListener('contextmenu', e => {if (e.target.closest('.cd[data-cal]')) e.preventDefault()});
+/* Ventana del día: arrastrar los puntos de una tarea cambia su orden dentro del día. */
+let dvDrag = null;
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-dvdrag]'); if (!h) return;
+  const li = h.closest('.dv-r'), ul = li && li.closest('.dv-list'); if (!li || !ul) return;
+  e.preventDefault(); dvDrag = {li, ul, id: e.pointerId, moved: false};
+  li.classList.add('dragging'); try {h.setPointerCapture(e.pointerId)} catch (_) {}
+});
+document.addEventListener('pointermove', e => {
+  const g = dvDrag; if (!g || g.id !== e.pointerId) return;
+  const sibs = [...g.ul.querySelectorAll('.dv-r')].filter(x => x !== g.li);
+  const after = sibs.find(x => {const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2});
+  if (after) {if (g.li.nextElementSibling !== after) {g.ul.insertBefore(g.li, after); g.moved = true}}
+  else if (g.ul.lastElementChild !== g.li) {g.ul.appendChild(g.li); g.moved = true}
+});
+const dvEnd = e => {
+  const g = dvDrag; if (!g || g.id !== e.pointerId) return;
+  dvDrag = null; g.li.classList.remove('dragging');
+  if (!g.moved) return;
+  L.setDayOrder(S, g.ul.dataset.dvday, [...g.ul.querySelectorAll('.dv-r')].map(x => x.dataset.key)); touch();
+};
+document.addEventListener('pointerup', dvEnd);
+document.addEventListener('pointercancel', dvEnd);
 setInterval(tick, 500);
 document.addEventListener('visibilitychange', () => {if (!document.hidden) {tick(); wake()}});
 

@@ -37,6 +37,12 @@ Estado en memoria: `S = {app, subs, log}`. Se guarda en documentos:
 
 En Firebase, todo cuelga de `users/<uid>/`.
 
+Plan a mano (versión 3 de `app`):
+- `asig/<id>.pin[claveTarea] = 'AAAA-MM-DD'`: tarea fijada a un día con «Mover». `allocate` la coloca ahí antes que nada; si el día ya pasó o está cerrado, se ignora. Funciones: `pinTask`.
+- `app.dord['AAAA-MM-DD'] = [claves]`: orden puesto a mano dentro de un día. Funciones: `setDayOrder`.
+- Al marcar una tarea hecha desde la ventana del día, el usuario elige qué día la hizo (`markDone` con ese día).
+- Gráfico de días: cuántos días se ven se guarda por dispositivo en `localStorage` (`la-hoja-ui`).
+
 Horario (versión 2 de `app`):
 - `app.sched[0..6]` (lunes = 0) es `{slots: [{ini: 'HH:MM', fin: 'HH:MM'}]}`.
 - Un día del calendario es `{d, h, slots?, auto?}`. Si tiene franjas, `h` se calcula de ellas.

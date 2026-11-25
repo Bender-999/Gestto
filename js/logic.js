@@ -3,7 +3,7 @@
 const LV={1:'Alta',2:'Media',3:'Baja',0:'Fuera'},LVIN={alta:1,media:2,baja:3,fuera:0};
 const MIN_CHUNK=15,FAR='9999-12-31',FORMATO='hoja-carga/1';
 function slug(x){return String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50)}
-function newState(){return {app:{v:2,days:[],mode:'prio',defH:4,maxH:8,useRitmo:false,order:[],run:null,lastDay:'',closed:{},sched:{},brkH:10,standby:30},subs:{},log:{}}}
+function newState(){return {app:{v:3,days:[],dord:{},mode:'prio',defH:4,maxH:8,useRitmo:false,order:[],run:null,lastDay:'',closed:{},sched:{},brkH:10,standby:30},subs:{},log:{}}}
 function addDays(d,n){const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10)}
 function monday(d){const x=new Date(d+'T00:00:00Z');return addDays(d,-((x.getUTCDay()+6)%7))}
 function minDate(...l){const v=l.filter(Boolean).sort();return v[0]||''}
@@ -82,7 +82,8 @@ function migrateApp(app){
     if(x.ini&&x.fin&&toMin(x.fin)>toMin(x.ini))o.slots=[{ini:x.ini,fin:x.fin}];
     return o;
   });
-  app.v=2;
+  app.dord=app.dord&&typeof app.dord==='object'?app.dord:{};
+  app.v=3;
   return app;
 }
 
@@ -143,7 +144,7 @@ function normalize(o){
   if([...g.keys()].some(cyc))e.push('Las dependencias forman un círculo: ninguna tarea podría empezar.');
   return e.length?{ok:false,errors:e}:{ok:true,sub:s};
 }
-function emptyProgress(){return {lvl:{},mins:{},done:{},real:{},target:'',pct:0,activa:true}}
+function emptyProgress(){return {lvl:{},mins:{},done:{},real:{},pin:{},target:'',pct:0,activa:true}}
 function emptySub(nombre,limite){const f=isDate(limite)?limite:'';return {id:slug(nombre),nombre:String(nombre).trim(),tipo:'asignatura',limite:f,limites:f?[{id:'examen',nombre:'Fecha límite',fecha:f,empezarAntes:0}]:[],prio:2,revDef:true,revPct:0,minDia:0,notas:'',grupos:[]}}
 function taskCount(s){return s.grupos.reduce((a,g)=>a+(g.tipo==='recurrente'||g.tipo==='diaria'?1:(g.tareas||[]).length),0)}
 function subState(S,s,today){
@@ -172,7 +173,7 @@ function diffSub(old,nw){
   return {added,removed,changed,keep:[...b.keys()].filter(k=>a.has(k)).length};
 }
 function applySub(S,nw){
-  const old=S.subs[nw.id],base=old?{lvl:old.lvl,mins:old.mins,done:old.done,real:old.real,target:old.target,pct:old.pct,activa:old.activa}:emptyProgress();
+  const old=S.subs[nw.id],base=old?{lvl:old.lvl,mins:old.mins,done:old.done,real:old.real,pin:old.pin||{},target:old.target,pct:old.pct,activa:old.activa}:emptyProgress();
   if(old){const b=taskIndex(nw);for(const k of Object.keys(base.mins)){const id=k.split('/').slice(1).join('/');if(!b.has(id))delete base.mins[k]}}
   const man=old?old.grupos.filter(g=>g.manual):[];
   S.subs[nw.id]={...nw,...base,minDia:nw.minDia||(old&&old.minDia)||0,grupos:[...nw.grupos,...man]};
@@ -285,6 +286,16 @@ function allocate(S,today,opt){
       take(p,d,n);b-=n;
     }
   };
+  /* Tareas fijadas a mano a un día: van primero a ese día. Si no caben enteras, lo que
+     sobra se reparte a partir del día siguiente. Un día pasado o cerrado anula la fijación. */
+  const pinOf=k=>{const s=S.subs[k.split('/')[0]];return s&&s.pin?s.pin[k]||'':''};
+  for(const p of pend){
+    const d=pinOf(p.it.key);if(!d||!open.includes(d))continue;
+    p.it.pinned=d;
+    const n=p.it.unit?p.left:Math.min(p.left,Math.max(0,rem[d]));
+    if(n>0){take(p,d,n);rem[d]=Math.max(0,rem[d])}
+    if(p.left>0){const nb=addDays(d,1);if(!p.it.notBefore||p.it.notBefore<nb)p.it.notBefore=nb}
+  }
   open.forEach((d,oi)=>{
     const act=ranked.filter(id=>pend.some(p=>p.it.sid===id&&elig(p,d,rem[d])));
     let budget=act.map(id=>Math.max(0,(+S.subs[id].minDia||0)*60-(subDay[d+'|'+id]||0)));
@@ -334,6 +345,9 @@ function allocate(S,today,opt){
     const first=[...new Set(plan[d].map(r=>r.it.sid))].sort((x,y)=>(srOf[x]??99)-(srOf[y]??99)),merged=[];
     for(const r of plan[d]){const o=merged.find(y=>y.it.key===r.it.key&&!y.done&&!r.done);if(o){o.m+=r.m;const c=chunks.get(r.it.key);c.splice(c.indexOf(r),1)}else merged.push(r)}
     plan[d]=first.flatMap(sid=>merged.filter(r=>r.it.sid===sid));
+    /* Orden puesto a mano en ese día (app.dord[d]): lo que no aparece va detrás. */
+    const ord=(app.dord||{})[d];
+    if(ord&&ord.length){const ix=k=>{const i=ord.indexOf(k);return i<0?1e9:i};plan[d]=plan[d].map((r,i)=>({r,i})).sort((a,b)=>ix(a.r.it.key)-ix(b.r.it.key)||a.i-b.i).map(x=>x.r)}
   }
   for(const [,c] of chunks){c.sort((a,b)=>0);if(c.length>1)c.forEach((r,i)=>{r.part=i+1;r.parts=c.length;r.nextDay=null})}
   for(const d of dayList)for(const r of plan[d])if(r.part&&r.part<r.parts){const c=chunks.get(r.it.key),nx=c[r.part];r.nextDay=dayList.find(x=>plan[x].includes(nx))}
@@ -436,6 +450,10 @@ function markDone(S,it,day,mins){
   if(it.unit){const keys=it.children,t=keys.reduce((a,k)=>a+(+s.mins[k]||0),0);keys.forEach(k=>{s.done[k]=day;if(mins)s.real[k]=Math.max(1,Math.round(mins/keys.length))});if(mins)s.real[it.key]=Math.max(1,Math.round(mins))}
   else{s.done[it.key]=day;if(mins)s.real[it.key]=Math.max(1,Math.round(mins))}
 }
+/* Fijar una tarea a un día (o soltarla con d vacío). */
+function pinTask(S,key,d){const s=S.subs[key.split('/')[0]];if(!s)return;s.pin=s.pin||{};if(d)s.pin[key]=d;else delete s.pin[key]}
+/* Guarda el orden de las tareas de un día tal como lo deja el usuario. */
+function setDayOrder(S,d,keys){S.app.dord=S.app.dord||{};if(keys&&keys.length)S.app.dord[d]=[...keys];else delete S.app.dord[d]}
 function unmarkDone(S,it){const s=S.subs[it.sid];(it.unit?it.children:[it.key]).forEach(k=>{delete s.done[k]});delete s.real[it.key]}
 function finishTask(S,now){
   const r=S.app.run,it=findItem(S,r.key,r.day);
@@ -510,4 +528,4 @@ function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
