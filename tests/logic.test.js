@@ -232,3 +232,19 @@ test('reparto: tareas enteras; los exámenes no se parten', () => {
   const ej = Object.values(al.plan).flat().filter(x => x.it.key.endsWith('/e1'));
   assert.equal(ej.reduce((a, x) => a + x.m, 0), 100);
 });
+
+test('stats por periodo: solo cuenta lo de esos días', () => {
+  const S = L.newState();
+  L.parseText(JSON.stringify(SAMPLE)).subs.forEach(s => L.applySub(S, s));
+  const sid = S.app.order[0], d1 = '2026-11-23', d2 = '2026-11-26', t1 = Date.UTC(2026, 10, 23, 15), t2 = Date.UTC(2026, 10, 26, 15), min = 60000;
+  S.app.days = [{d: d1, h: 4}, {d: d2, h: 5}, {d: '2026-11-30', h: 3}];
+  S.log['2026-11'] = [{a: sid, d: d1, k: sid + '/x', s: t1, e: t1 + 60 * min, t: 'd'}, {a: sid, d: d2, k: sid + '/y', s: t2, e: t2 + 30 * min, t: 'd'}, {a: sid, d: d2, k: '', s: t2 + 30 * min, e: t2 + 40 * min, t: 'b'}];
+  const it = L.buildItems(S, d1).find(i => i.sid === sid && !i.open);
+  L.markDone(S, it, d2, 30);
+  const day = L.stats(S, d2, t2 + 50 * min, null, {from: d2, to: d2});
+  assert.equal(day.study, 30); assert.equal(day.brk, 10); assert.equal(day.days.length, 1);
+  assert.equal(day.days[0].plan, 300); assert.equal(day.tasks, 1); assert.equal(day.tasksBy[sid], 1);
+  const wk = L.stats(S, d2, t2 + 50 * min, null, {from: d1, to: L.addDays(d1, 6)});
+  assert.equal(wk.study, 90); assert.equal(wk.days.length, 2);
+  assert.equal(L.stats(S, d2, t2 + 50 * min).study, 90);
+});

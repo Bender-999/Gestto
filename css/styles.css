@@ -748,3 +748,17 @@ body.fs-on .sp-ses-top .btn,body.fs-on .sp-more,body.fs-on .sp-today,body.fs-on 
 body.fs-on .sp-ses-top{justify-content:center}
 body.fs-on .runbar{display:none}
 body.fs-on .toast-wrap{z-index:130}
+
+/* Mis datos: periodo (día, semana, todo) y detalle de la gráfica. */
+.dper{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:0 0 16px}
+.dnav{display:flex;align-items:center;gap:8px}
+.dnav b{font:600 15px/1.2 var(--f-body);min-width:0}
+.dnav .btn{min-width:44px;min-height:44px;border-radius:999px;font-size:18px}
+.dnav .btn[data-dnav="0"]{font-size:14px}
+.dnav .btn:disabled{opacity:.35;cursor:default}
+.dr.fut>span{opacity:.6}
+.dchart [data-tip]{cursor:default}
+.dchart [data-tip=sub]:hover{filter:brightness(1.12)}
+.dtip{position:fixed;z-index:140;display:grid;gap:3px;min-width:150px;max-width:260px;padding:10px 12px;background:var(--ink);color:var(--bg);border-radius:var(--r);box-shadow:var(--shadow);font:400 13px/1.3 var(--f-body);pointer-events:none}
+.dtip small{font:400 11px/1 var(--f-data);opacity:.7;text-transform:uppercase;letter-spacing:.05em}
+.dtip b{display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px}
