@@ -1,5 +1,10 @@
 # Historial
 
+## Versión 2.9 (26 de noviembre de 2026)
+
+- Versión simplificada: el resumen del día lleva las gráficas de Mis datos (semana y día por horas) y las cifras debajo. Se quita la lista de tareas hechas.
+- `stChart` en `ui.js`: la tarjeta de gráficas, compartida por Mis datos y el resumen del móvil.
+
 ## Versión 2.8 (26 de noviembre de 2026)
 
 - Mis datos con gráficas al estilo de Tiempo de uso: la semana arriba, el día por horas abajo y la leyenda por asignatura. Las cifras pasan debajo.

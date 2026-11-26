@@ -403,17 +403,11 @@ function renderSimpleSession(al) {
 }
 function renderSimpleSummary() {
   const d = spSum || TODAY, o = L.dayStats(S, d, Date.now()), pct = o.plan ? Math.round(100 * o.study / o.plan) : 0;
-  const subs = Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]);
-  const bar = subs.map(id => `<i style="width:${o.study ? 100 * o.bySub[id] / o.study : 0}%;background:${colorOf(id)}"></i>`).join('');
-  const leg = subs.map(id => `<li>${sw(id)}<span>${esc(S.subs[id] ? S.subs[id].nombre : id)}</span><b class="num">${fmt(o.bySub[id])}</b></li>`).join('');
-  const dev = t => {if (!t.real || !t.est) return ''; const v = Math.round(100 * (t.real / t.est - 1)); return `<em class="${v > 0 ? 'neg' : 'pos'}">${v >= 0 ? '+' : '−'}${Math.abs(v)} %</em>`};
-  const tasks = o.tasks.map(t => `<li>${sw(t.sid)}<span>${esc(t.name)}<small>${esc(t.subName)}</small></span><b class="num">${t.real ? fmt(t.real) : '—'}<small>de ${fmt(t.est)}</small></b>${dev(t)}</li>`).join('');
   $('main').innerHTML = `<div class="sp sp-res">
     <div class="sp-head"><button type="button" class="btn ghost sm" data-sp="dia">‹ Día</button><div class="sp-date"><b>Resumen</b><span>${dayLabel(d, {weekday: 'long', month: 'long'})}</span></div><span></span></div>
     <div class="sp-hero"><b>${fmt(o.study)}</b><span>de estudio${o.plan ? ` de ${fmt(o.plan)} previstas` : ''}</span>${o.plan ? `<div class="sp-prog big"><i style="width:${Math.min(100, pct)}%"></i></div><small>${pct} % de lo previsto</small>` : ''}</div>
-    <div class="sp-tiles"><div><b>${fmt(o.brk)}</b><small>de descanso${o.nBreaks ? ` en ${o.nBreaks} ${o.nBreaks === 1 ? 'parada' : 'paradas'}` : ''}</small></div><div><b>${fmt(o.maxStint)}</b><small>bloque más largo sin parar</small></div><div><b>${fmt(o.paus)}</b><small>en pausa, no cuenta</small></div><div><b>${o.tasks.length}</b><small>${o.tasks.length === 1 ? 'tarea hecha' : 'tareas hechas'}</small></div></div>
-    ${subs.length ? `<section class="card"><h2>Por asignatura</h2><div class="sp-stack">${bar}</div><ul class="sp-leg">${leg}</ul></section>` : ''}
-    ${o.tasks.length ? `<section class="card"><h2>Tareas hechas</h2><ul class="sp-tasks">${tasks}</ul></section>` : ''}
+    ${stChart(d, true, {from: d, to: d}, L.stats(S, TODAY, Date.now(), null, {from: d, to: d}), null, false)}
+    <div class="sp-tiles three"><div><b>${fmt(o.brk)}</b><small>de descanso${o.nBreaks ? ` en ${o.nBreaks} ${o.nBreaks === 1 ? 'parada' : 'paradas'}` : ''}</small></div><div><b>${fmt(o.maxStint)}</b><small>bloque más largo sin parar</small></div><div><b>${fmt(o.paus)}</b><small>en pausa, no cuenta</small></div></div>
     ${!o.study && !o.tasks.length ? '<div class="empty">Ese día no hay estudio registrado.</div>' : ''}
     ${d === TODAY ? '<button type="button" class="btn ghost sp-wide" data-act="go">Seguir estudiando hoy</button>' : ''}</div>`;
 }
@@ -737,32 +731,7 @@ function renderData() {
   const per = dPer === 'dia' ? 'este día' : dPer === 'semana' ? 'esta semana' : '';
   const dev = o.estT ? o.domT / o.estT - 1 : 0, hrs = o.study / 60;
   const t = [[fmt(o.study), 'de estudio real'], ...(sc ? [] : [[fmt(o.planned), rng ? 'previstas' + (cur ? ' hasta hoy' : '') : 'previstas hasta hoy'], [(o.planned ? Math.round(100 * o.study / o.planned) : 0) + ' %', 'de lo previsto cumplido']]), [fmt(o.brk), 'en descanso'], [String(o.tasks), o.tasks === 1 ? 'tarea acabada' : 'tareas acabadas'], [fmt(o.meanStint), 'de media sin descanso'], [fmt(o.maxStint), 'tu bloque más largo'], [o.breaks.length ? fmt(o.meanBreak) : '—', 'de media por descanso'], [(o.study ? Math.round(100 * o.study / (o.study + o.brk)) : 0) + ' %', 'del tiempo sentado es estudio'], [fmt(o.rev), 'revisando, ' + (o.dom ? Math.round(100 * o.rev / o.dom) : 0) + ' % sobre lo hecho'], [fmt(o.paus), 'en pausa, no cuenta'], [fmt(o.extraMin), (o.extraN === 1 ? '1 tarea' : o.extraN + ' tareas') + ' fuera del plan'], [String(o.nt), 'tareas acabadas con temporizador'], [hrs ? dec(o.nt / hrs, 1) : '0', 'tareas por hora'], [o.nt ? (dev >= 0 ? '+' : '−') + Math.abs(Math.round(dev * 100)) + ' %' : '—', o.nt ? 'tardas frente a lo estimado, sin revisar' : 'desviación, sin tareas acabadas']].map(([a, b]) => `<div><b>${a}</b><small>${b}</small></div>`).join('');
-  /* Gráficas al estilo de Tiempo de uso: arriba la semana (barras por día, la media y lo previsto
-     como contorno) y abajo el día elegido por horas. Tocar un día de la semana lo elige. */
-  const ref = dRef || TODAY, wk0 = L.monday(rng && dPer === 'semana' ? rng.from : ref), wd = L.stats(S, TODAY, Date.now(), sc, {from: wk0, to: L.addDays(wk0, 6)});
-  const wBy = Object.fromEntries(wd.days.map(x => [x.d, x]));
-  const blank = d => ({d, plan: 0, dom: 0, rev: 0, brk: 0, tasks: 0, logged: false, bySub: {}, tasksBy: {}});
-  const week = Array.from({length: 7}, (_, i) => {const d = L.addDays(wk0, i); return wBy[d] || blank(d)});
-  const past = week.filter(x => x.d <= TODAY && (x.logged || x.plan)), avg = past.length ? past.reduce((a, x) => a + x.dom + x.rev, 0) / past.length : 0;
-  const wMax = Math.max(60, Math.ceil(Math.max(...week.map(x => Math.max(sc ? 0 : x.plan, x.dom + x.rev))) / 60) * 60), hp = m => Math.min(100, 100 * m / wMax) + '%';
-  const selD = dPer === 'dia' ? ref : null, LET = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-  const wCols = week.map((x, i) => {
-    const fut = x.d > TODAY, sel = !selD || x.d === selD;
-    const segs = Object.keys(x.bySub).map(id => `<i style="height:${hp(x.bySub[id])};background:${sel ? colorOf(id) : 'var(--muted)'}" data-tip="sub" data-sid="${esc(id)}" data-d="${x.d}"></i>`).join('');
-    return `<button type="button" class="stw-c${x.d === selD ? ' sel' : ''}${fut ? ' fut' : ''}${x.d === TODAY ? ' today' : ''}" data-dday="${x.d}"${fut ? ' disabled' : ''} aria-label="${dayLabel(x.d)}: ${fmt(x.dom + x.rev)} de estudio"><span class="stw-bar">${!sc && x.plan ? `<em class="stw-plan" style="height:${hp(x.plan)}" data-tip="plan" data-d="${x.d}"></em>` : ''}<span class="stw-stack">${segs}</span></span><small>${LET[i]}</small></button>`;
-  }).join('');
-  dataDays = Object.fromEntries(week.map(x => [x.d, x]));
-  const hd = L.hourly(S, ref, Date.now(), sc); hourData = {d: ref, H: hd};
-  const hCols = hd.map((h, i) => `<div class="sth-c">${h.brk ? `<i style="height:${Math.min(100, 100 * h.brk / 60)}%;background:var(--track)" data-tip="hbrk" data-h="${i}"></i>` : ''}${Object.keys(h.bySub).map(id => `<i style="height:${Math.min(100, 100 * h.bySub[id] / 60)}%;background:${colorOf(id)}" data-tip="hsub" data-sid="${esc(id)}" data-h="${i}"></i>`).join('')}</div>`).join('');
-  const dayTot = hd.reduce((a, h) => a + h.tot, 0);
-  const leg = Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]).map(id => `<div><span style="color:${colorOf(id)}">${S.subs[id] ? esc(S.subs[id].nombre) : esc(id)}</span><b>${fmt(o.bySub[id])}</b></div>`).join('');
-  const headL = dPer === 'dia' ? (ref === TODAY ? 'Hoy, ' + dayLabel(ref, {weekday: undefined, month: 'long'}) : dayLabel(ref, {weekday: 'long', month: 'long'})) : dPer === 'semana' ? 'Semana del ' + dayLabel(rng.from) + ' al ' + dayLabel(rng.to) : 'Desde el principio';
-  const chart = `<section class="card stc">
-    <div class="stc-h"><small>${headL}</small><b>${fmt(o.study)}</b>${!sc && o.planned ? `<span>de ${fmt(o.planned)} previstas</span>` : ''}</div>
-    <div class="stw"><div class="stw-g"><div class="stw-cols">${wCols}</div>${avg ? `<i class="stw-avg" style="bottom:${24 + 150 * Math.min(1, avg / wMax)}px"></i>` : ''}<div class="stw-ax"><span style="bottom:100%">${fmt(wMax)}</span>${avg ? `<span class="avg" style="bottom:${hp(avg)}">media</span>` : ''}<span style="bottom:0">0</span></div></div></div>
-    <div class="sth"><div class="sth-t">${dayLabel(ref)} por horas${dayTot ? ' · ' + fmt(dayTot) : ''}</div><div class="sth-g"><div class="sth-cols">${hCols}</div><div class="sth-ax"><span style="bottom:100%">60 min</span><span style="bottom:50%">30 min</span><span style="bottom:0">0</span></div></div><div class="sth-x"><span>0</span><span>6</span><span>12</span><span>18</span></div></div>
-    ${leg ? `<div class="stl">${leg}</div>` : ''}
-    <p class="sub stc-help">Toca un día para verlo. Pasa el cursor o toca una barra para ver el detalle.${sc ? '' : ' El contorno es lo previsto.'}</p></section>`;
+  const ref = dRef || TODAY, chart = stChart(ref, dPer === 'dia', rng, o, sc, true, rng && dPer === 'semana' ? rng.from : '');
   const sb = sc ? '' : Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]).map(id => `<tr><td>${S.subs[id] ? sw(id) + esc(S.subs[id].nombre) : esc(id)}</td><td class="r">${fmt(o.bySub[id])}</td><td class="r">${o.tasksBy[id] || 0}</td><td class="r">${Math.round(100 * o.bySub[id] / o.study)} %</td></tr>`).join('');
   const rows = o.rows.map(r => `<tr><td>${esc(r.name)}</td><td class="r">${r.n}</td><td class="r">${fmt(r.est)}</td><td class="r">${fmt(r.dom)}</td><td class="r">${fmt(r.rev)}</td><td class="r ${r.dom > r.est ? 'neg' : 'pos'}">${r.est ? (r.dom >= r.est ? '+' : '−') + Math.abs(Math.round(100 * (r.dom / r.est - 1))) + ' %' : '—'}</td></tr>`).join('');
   const dt = o.days.filter(d => d.logged).map(d => `<tr><td>${dayLabel(d.d)}</td>${sc ? '' : `<td class="r">${fmt(d.plan)}</td>`}<td class="r">${fmt(d.dom + d.rev)}</td><td class="r">${fmt(d.rev)}</td><td class="r">${fmt(d.brk)}</td><td class="r">${d.tasks}</td></tr>`).join('');
@@ -773,6 +742,36 @@ function renderData() {
    ${sb ? `<section><h2>Por asignatura</h2><div class="tw"><table style="min-width:360px"><thead><tr><th>Asignatura</th><th class="r">Estudio</th><th class="r">Tareas</th><th class="r">Parte</th></tr></thead><tbody>${sb}</tbody></table></div></section>` : ''}
    ${dt && dPer !== 'dia' ? `<section><h2>Tabla por día</h2><div class="tw"><table><thead><tr><th>Día</th>${sc ? '' : '<th class="r">Previsto</th>'}<th class="r">Estudio</th><th class="r">Revisión</th><th class="r">Descanso</th><th class="r">Tareas</th></tr></thead><tbody>${dt}</tbody></table></div></section>` : ''}
    ${rows ? `<section><h2>Estimado frente a real</h2><p class="sub">Solo tareas acabadas con el temporizador. La desviación compara hacer con lo estimado.</p><div class="tw"><table><thead><tr><th>${sc ? 'Grupo' : 'Asignatura'}</th><th class="r">Tareas</th><th class="r">Estimado</th><th class="r">Hacer</th><th class="r">Revisión</th><th class="r">Desviación</th></tr></thead><tbody>${rows}</tbody></table></div></section>` : ''}`;
+}
+/* Tarjeta de gráficas de Mis datos y del resumen del móvil. ref: día elegido; dayMode: el día va en
+   color y el resto en gris; wkFrom: lunes de la semana a enseñar; o: stats del periodo (leyenda y total). */
+function stChart(ref, dayMode, rng, o, sc, head, wkFrom) {
+  /* Gráficas al estilo de Tiempo de uso: arriba la semana (barras por día, la media y lo previsto
+     como contorno) y abajo el día elegido por horas. Tocar un día de la semana lo elige. */
+  const wk0 = L.monday(wkFrom || ref), wd = L.stats(S, TODAY, Date.now(), sc, {from: wk0, to: L.addDays(wk0, 6)});
+  const wBy = Object.fromEntries(wd.days.map(x => [x.d, x]));
+  const blank = d => ({d, plan: 0, dom: 0, rev: 0, brk: 0, tasks: 0, logged: false, bySub: {}, tasksBy: {}});
+  const week = Array.from({length: 7}, (_, i) => {const d = L.addDays(wk0, i); return wBy[d] || blank(d)});
+  const past = week.filter(x => x.d <= TODAY && (x.logged || x.plan)), avg = past.length ? past.reduce((a, x) => a + x.dom + x.rev, 0) / past.length : 0;
+  const wMax = Math.max(60, Math.ceil(Math.max(...week.map(x => Math.max(sc ? 0 : x.plan, x.dom + x.rev))) / 60) * 60), hp = m => Math.min(100, 100 * m / wMax) + '%';
+  const selD = dayMode ? ref : null, LET = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const wCols = week.map((x, i) => {
+    const fut = x.d > TODAY, sel = !selD || x.d === selD;
+    const segs = Object.keys(x.bySub).map(id => `<i style="height:${hp(x.bySub[id])};background:${sel ? colorOf(id) : 'var(--muted)'}" data-tip="sub" data-sid="${esc(id)}" data-d="${x.d}"></i>`).join('');
+    return `<button type="button" class="stw-c${x.d === selD ? ' sel' : ''}${fut ? ' fut' : ''}${x.d === TODAY ? ' today' : ''}" data-dday="${x.d}"${fut ? ' disabled' : ''} aria-label="${dayLabel(x.d)}: ${fmt(x.dom + x.rev)} de estudio"><span class="stw-bar">${!sc && x.plan ? `<em class="stw-plan" style="height:${hp(x.plan)}" data-tip="plan" data-d="${x.d}"></em>` : ''}<span class="stw-stack">${segs}</span></span><small>${LET[i]}</small></button>`;
+  }).join('');
+  dataDays = Object.fromEntries(week.map(x => [x.d, x]));
+  const hd = L.hourly(S, ref, Date.now(), sc); hourData = {d: ref, H: hd};
+  const hCols = hd.map((h, i) => `<div class="sth-c">${h.brk ? `<i style="height:${Math.min(100, 100 * h.brk / 60)}%;background:var(--track)" data-tip="hbrk" data-h="${i}"></i>` : ''}${Object.keys(h.bySub).map(id => `<i style="height:${Math.min(100, 100 * h.bySub[id] / 60)}%;background:${colorOf(id)}" data-tip="hsub" data-sid="${esc(id)}" data-h="${i}"></i>`).join('')}</div>`).join('');
+  const dayTot = hd.reduce((a, h) => a + h.tot, 0);
+  const leg = Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]).map(id => `<div><span style="color:${colorOf(id)}">${S.subs[id] ? esc(S.subs[id].nombre) : esc(id)}</span><b>${fmt(o.bySub[id])}</b></div>`).join('');
+  const headL = dayMode ? (ref === TODAY ? 'Hoy, ' + dayLabel(ref, {weekday: undefined, month: 'long'}) : dayLabel(ref, {weekday: 'long', month: 'long'})) : dPer === 'semana' ? 'Semana del ' + dayLabel(rng.from) + ' al ' + dayLabel(rng.to) : 'Desde el principio';
+  return `<section class="card stc">
+    ${head ? `<div class="stc-h"><small>${headL}</small><b>${fmt(o.study)}</b>${!sc && o.planned ? `<span>de ${fmt(o.planned)} previstas</span>` : ''}</div>` : ''}
+    <div class="stw"><div class="stw-g"><div class="stw-cols">${wCols}</div>${avg ? `<i class="stw-avg" style="bottom:${24 + 150 * Math.min(1, avg / wMax)}px"></i>` : ''}<div class="stw-ax"><span style="bottom:100%">${fmt(wMax)}</span>${avg ? `<span class="avg" style="bottom:${hp(avg)}">media</span>` : ''}<span style="bottom:0">0</span></div></div></div>
+    <div class="sth"><div class="sth-t">${dayLabel(ref)} por horas${dayTot ? ' · ' + fmt(dayTot) : ''}</div><div class="sth-g"><div class="sth-cols">${hCols}</div><div class="sth-ax"><span style="bottom:100%">60 min</span><span style="bottom:50%">30 min</span><span style="bottom:0">0</span></div></div><div class="sth-x"><span>0</span><span>6</span><span>12</span><span>18</span></div></div>
+    ${leg ? `<div class="stl">${leg}</div>` : ''}
+    <p class="sub stc-help">Toca un día para verlo. Pasa el cursor o toca una barra para ver el detalle.${sc ? '' : ' El contorno es lo previsto.'}</p></section>`;
 }
 /* Detalle al pasar el cursor (o tocar) por un tramo de la gráfica de Mis datos. */
 let dataDays = {}, dtipT = null, hourData = {d: '', H: []};
@@ -958,7 +957,7 @@ document.addEventListener('click', e => {
   if (d.spmore) {spMore = !spMore; render(); return}
   if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
   if (d.undo) {undoDone(); return}
-  if (d.dday) {dPer = 'dia'; dRef = d.dday === TODAY ? null : d.dday; dataTipHide(); render(); return}
+  if (d.dday) {if (uiPref.simple) spSum = d.dday; else {dPer = 'dia'; dRef = d.dday === TODAY ? null : d.dday} dataTipHide(); render(); return}
   if (d.dnav !== undefined) {const k = +d.dnav, st = dPer === 'semana' ? 7 : 1; dRef = k ? L.addDays(dRef || TODAY, k * st) : null; if (dRef && dRef > TODAY) dRef = null; dataTipHide(); render(); return}
   if (d.fs) {fsOn ? fsExit() : fsEnter(); return}
   if (d.dvopen) {const it = L.findItem(S, d.key, TODAY); if (it) markWithUndo([[it, dayView && dayView <= TODAY ? dayView : TODAY, d.dvopen === 'fin']]); doneAsk = null; commit(); return}

@@ -806,3 +806,4 @@ body.fs-on .toast-wrap{z-index:130}
 .stl b{font:500 15px/1.2 var(--f-data)}
 .stc-help{margin:0}
 @media (max-width:640px){.stw-cols{gap:5px}.sth-cols{gap:2px}.stc-h b{font-size:38px}}
+.sp-tiles.three>div:last-child{grid-column:1/-1}

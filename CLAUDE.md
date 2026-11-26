@@ -50,7 +50,7 @@ Tareas de cada día (abiertas):
 
 Versión simplificada (móvil):
 - Se activa por dispositivo con `uiPref.simple` (también en `la-hoja-ui`). `render()` llama a `renderSimple` y oculta la versión completa.
-- Pantallas según `sp`: `'dia'` (`renderSimpleDay`, usa `dayView` y la lista de `dayViewModal(al, true)`), `'sesion'` (`renderSimpleSession`, mismos `data-act` que la sesión completa) y `'resumen'` (`renderSimpleSummary`, con `dayStats` de `logic.js`).
+- Pantallas según `sp`: `'dia'` (`renderSimpleDay`, usa `dayView` y la lista de `dayViewModal(al, true)`), `'sesion'` (`renderSimpleSession`, mismos `data-act` que la sesión completa) y `'resumen'` (`renderSimpleSummary`, con `dayStats` de `logic.js` y las gráficas de `stChart`).
 - Cambiar de día: `spGo`, botones `data-spgo` y deslizar (eventos táctiles).
 
 Sesión y avisos:
