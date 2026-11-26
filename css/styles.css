@@ -735,20 +735,16 @@ body:has(.dv-bar) .runbar,body:has(.modal-bg) .runbar{display:none}
 .dv-add{margin-top:10px}
 .dv-add .addbox{margin:0}
 
-/* Cronómetro: se toca para verlo a pantalla completa. */
-button.big{background:none;border:0;padding:0 .1em;margin:0;color:inherit;cursor:zoom-in;border-radius:var(--r-l)}
+/* Sesión a pantalla completa: se toca el cronómetro para entrar y para salir. */
+button.big{background:none;border:0;padding:0 .1em;margin:0;color:inherit;cursor:pointer;border-radius:var(--r-l);transition:opacity .15s}
+button.big:hover{opacity:.85}
 button.big:focus-visible{outline:3px solid currentColor;outline-offset:6px}
-.fs-timer{position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:var(--panel);color:var(--ink);cursor:zoom-out;user-select:none;-webkit-user-select:none;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
-.fs-timer[data-phase=do]{background:var(--accent);color:var(--bg)}
-.fs-timer[data-phase=review]{background:var(--exam);color:var(--bg)}
-.fs-timer[data-phase=break]{background:var(--low);color:var(--bg)}
-.fs-timer[data-phase=pause]{background:repeating-linear-gradient(135deg,var(--track) 0 28px,var(--panel) 28px 56px)}
-.fs-timer b{font:600 100px/.9 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
-.fs-timer.over b{color:var(--over)}
-.fs-timer[data-phase=do].over{background:var(--ink)}
-.fs-timer[data-phase=pause] b{opacity:.6}
-@media (prefers-reduced-motion:no-preference){.fs-timer:not([hidden]){animation:fsIn .25s ease-out}}
-@keyframes fsIn{from{opacity:0;transform:scale(.97)}}
 body.fs-on{overflow:hidden}
+body.fs-on .focus{position:fixed;inset:0;z-index:120;margin:0;border:0;border-radius:0;min-height:100vh;min-height:100dvh;padding:max(24px,env(safe-area-inset-top,0px)) 24px max(24px,env(safe-area-inset-bottom,0px));overflow:auto}
+body.fs-on .focus .big{font-size:clamp(110px,min(24vw,44vh),420px)}
+body.fs-on .sp-ses{position:fixed;inset:0;z-index:120;margin:0;background:var(--bg);min-height:100vh;min-height:100dvh;align-content:center;padding:max(20px,env(safe-area-inset-top,0px)) 16px max(20px,env(safe-area-inset-bottom,0px));overflow:auto}
+body.fs-on .sp-ses .big{font-size:clamp(96px,30vw,200px)}
+body.fs-on .sp-ses-top .btn,body.fs-on .sp-more,body.fs-on .sp-today,body.fs-on .sp-next,body.fs-on .sp-ses .addbox{display:none}
+body.fs-on .sp-ses-top{justify-content:center}
 body.fs-on .runbar{display:none}
 body.fs-on .toast-wrap{z-index:130}
