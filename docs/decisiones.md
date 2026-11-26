@@ -46,6 +46,8 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Asignatura › Prioridades y tiempos | Cada grupo dice cuántas tareas lleva hechas y cuánto queda. Cada tarea tiene su casilla: se marca hecha hoy o se desmarca desde ahí |
 | Tareas de cada día | Una tarea puede no tener tiempo total: lleva un rato al día y sale cada día de estudio hasta que la marques acabada (o llegue su fecha límite). En la sesión: «Por hoy» (cuenta el rato y sigue mañana) y «Acabada». En la ventana del día: «Hecha por hoy» o «Acabada del todo». Desmarcarla la reabre |
 | Dónde se crean | Plan › Añadir tarea («Una vez» o «Cada día hasta acabarla»), la ventana del día o la lista del móvil (una de una vez queda fija en ese día; una de cada día empieza ese día), la sesión («Tarea fuera del plan»: «Solo ahora» o «Varios días») y el texto de la IA (`minutos_por_dia`) |
+| Pantalla de sesión | Sin la fila de asignaturas: solo las pestañas y la sesión |
+| Cronómetro a pantalla completa | Al tocar el número de la sesión se ve solo el número, a todo el ancho y con el color de la fase (rojo sobre oscuro si te pasas). Se sale tocando o con Esc. En el iPhone ocupa toda la app; Safari no deja quitar la barra del navegador salvo con la app en la pantalla de inicio |
 | Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
 | Tus días | Sin lista de días: solo el calendario. Un clic añade o quita el día, dejar el cursor encima (o mantener pulsado en el móvil) muestra su ficha (horas, franjas, plan por asignatura y fechas límite) y doble clic abre una ventana para editar sus franjas |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |
