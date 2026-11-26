@@ -1,5 +1,14 @@
 # Historial
 
+## Versión 2.5 (26 de noviembre de 2026)
+
+- Las tareas hechas salen de las listas y del gráfico. Aviso con «Deshacer» y sección «Hechas» plegada al final de cada día.
+- Tareas de cada día: un rato al día hasta marcarlas acabadas. Se crean desde Plan, la ventana del día, la sesión y el texto de la IA (`minutos_por_dia`, `desde`). En la sesión, «Por hoy» y «Acabada».
+- «Añadir tarea a este día» en la ventana del día y en el móvil.
+- `docs/formato-ia.md` lista todas las propiedades de asignaturas, grupos y tareas.
+- Corregido: el plan partía cada tarea en trozos pequeños repartidos hasta su fecha límite (un examen de 150 min salía como 15 min durante 10 días). Ahora va entera; solo se parte si no cabe en el día, y los exámenes nunca.
+- Corregido: en la asignatura, «Prioridades y tiempos» no enseñaba las tareas hechas. Ahora cada grupo dice cuántas lleva y cada tarea tiene su casilla.
+
 ## Origen (noviembre de 2026)
 
 Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estructuras (Tema 1, ETSIAE) y acabó siendo un planificador general para varias asignaturas y proyectos, publicado como artefacto en Claude.

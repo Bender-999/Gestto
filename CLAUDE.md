@@ -43,6 +43,11 @@ Plan a mano (versión 3 de `app`):
 - Al marcar una tarea hecha desde la ventana del día, el usuario elige qué día la hizo (`markDone` con ese día).
 - Gráfico de días: cuántos días se ven se guarda por dispositivo en `localStorage` (`la-hoja-ui`).
 
+Tareas de cada día (abiertas):
+- Una tarea con `minDia` (y `desde` opcional) en vez de `min`. En el texto de la IA: `minutos_por_dia` y `desde`.
+- `buildItems` saca una tarea por día de estudio con clave `<sid>/<id>@AAAA-MM-DD`, `open: true` y `taskKey: '<sid>/<id>'`. «Por hoy» marca `done` de la del día; «Acabada» (`closeOpen`, `finishOpen`) marca también `done[taskKey]` y deja de salir. `unmarkDone` la reabre. `startOpen` la crea desde la sesión.
+- Campo nuevo y opcional: no hace falta conversión ni subir `app.v`.
+
 Versión simplificada (móvil):
 - Se activa por dispositivo con `uiPref.simple` (también en `la-hoja-ui`). `render()` llama a `renderSimple` y oculta la versión completa.
 - Pantallas según `sp`: `'dia'` (`renderSimpleDay`, usa `dayView` y la lista de `dayViewModal(al, true)`), `'sesion'` (`renderSimpleSession`, mismos `data-act` que la sesión completa) y `'resumen'` (`renderSimpleSummary`, con `dayStats` de `logic.js`).

@@ -30,13 +30,15 @@ const UIK = 'la-hoja-ui';
 const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
 const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
 if (!uiPref.dev) {uiPref.dev = Math.random().toString(36).slice(2, 10); saveUi()} /* Identifica este dispositivo para los avisos. */
-let alertList = [], alertShown = new Set(), toastT = null;
+let alertList = [], alertShown = new Set(), toastT = null, undoSnap = null;
+const hOpen = new Set(); /* Días con la sección «Hechas» abierta. */
 const LOADED = Date.now();
 let chartN = [3, 7, 10, 14].includes(uiPref.n) ? uiPref.n : (innerWidth < 640 ? 7 : 14), chartStart = TODAY, chartAnim = '';
 let dayView = null, doneAsk = null, moveAsk = null, selMode = false, selAsk = null;
 const sel = new Set();
 const exitSel = () => {selMode = false; selAsk = null; sel.clear()};
-let ma = {sid: '', nom: '', min: 30, pri: 1}, ex = {sid: '', nom: ''};
+let ma = {sid: '', nom: '', min: 30, pri: 1, tipo: 'una'}, ex = {sid: '', nom: '', tipo: 'hoy', min: 30}, dvAdd = false;
+const TIPO = [{v: 'una', label: 'Una vez'}, {v: 'dia', label: 'Cada día hasta acabarla'}];
 let store = {kind: 'local'};
 
 /* ---------- Pintado ---------- */
@@ -106,9 +108,29 @@ function fireAlert(x) {
 }
 function showToast(x) {
   const el = $('toast'); clearTimeout(toastT);
-  el.innerHTML = `<div class="toast" role="status"><div><b>${esc(x.title)}</b><span>${esc(x.body)}</span></div><button type="button" class="btn ghost sm" data-toast="0" aria-label="Cerrar">Vale</button></div>`;
-  el.hidden = false; toastT = setTimeout(() => {el.hidden = true; el.innerHTML = ''}, 15000);
-  try {navigator.vibrate && navigator.vibrate([180, 80, 180])} catch (e) {}
+  el.innerHTML = `<div class="toast" role="status"><div><b>${esc(x.title)}</b><span>${esc(x.body)}</span></div>${x.undo ? '<button type="button" class="btn ghost sm" data-undo="1">Deshacer</button>' : '<button type="button" class="btn ghost sm" data-toast="0" aria-label="Cerrar">Vale</button>'}</div>`;
+  el.hidden = false; toastT = setTimeout(() => {el.hidden = true; el.innerHTML = ''; if (x.undo) undoSnap = null}, x.undo ? 7000 : 15000);
+  if (!x.undo) try {navigator.vibrate && navigator.vibrate([180, 80, 180])} catch (e) {}
+}
+/* Marcar hechas a mano: la tarea sale de las listas y del gráfico, y unos segundos se puede deshacer.
+   También se desmarca desde «Hechas», al final de cada día. */
+function markWithUndo(list) {
+  const snap = [];
+  for (const [it, day, end] of list) {
+    const s = S.subs[it.sid], ks = it.unit ? [...it.children, it.key] : [it.key];
+    if (it.open) ks.push(it.taskKey);
+    ks.forEach(k => snap.push({sid: it.sid, k, done: s.done[k], real: s.real[k]}));
+    if (end) L.closeOpen(S, it, day, +s.real[it.key] || 0); else L.markDone(S, it, day, +s.real[it.key] || 0);
+  }
+  if (!list.length) return;
+  undoSnap = snap;
+  const one = list.length === 1 ? list[0][0] : null;
+  showToast({title: one ? (one.open ? (list[0][2] ? 'Tarea acabada' : 'Hecha por hoy') : 'Tarea hecha') : list.length + ' tareas hechas', body: one ? one.subName + ' · ' + one.name : 'Están en «Hechas», al final de cada día.', undo: true});
+}
+function undoDone() {
+  if (!undoSnap) return;
+  for (const x of undoSnap) {const s = S.subs[x.sid]; if (!s) continue; if (x.done === undefined) delete s.done[x.k]; else s.done[x.k] = x.done; if (x.real === undefined) delete s.real[x.k]; else s.real[x.k] = x.real}
+  undoSnap = null; clearTimeout(toastT); $('toast').hidden = true; $('toast').innerHTML = ''; commit();
 }
 /* Barra de la sesión: se ve en las demás pantallas mientras hay una sesión abierta. */
 function renderRunbar() {
@@ -119,7 +141,7 @@ function renderRunbar() {
   planAlerts();
   if (!show) {el.innerHTML = ''; el.hidden = true; return}
   const it = r.key ? L.findItem(S, r.key, r.day) : null, ph = r.phase, base = ph === 'break' ? r.back : ph;
-  const lbl = base === 'review' ? 'Revisada' : it && it.rev ? 'A revisar' : 'Hecha';
+  const lbl = it && it.open ? 'Por hoy' : base === 'review' ? 'Revisada' : it && it.rev ? 'A revisar' : 'Hecha';
   const B = (act, t, cls = '') => `<button type="button" class="btn ${cls}" data-act="${act}">${t}</button>`;
   let b = '';
   if (ph === 'pause') b = B('unpause', 'Reanudar');
@@ -180,7 +202,7 @@ function renderChart(al, ob) {
   al.days.forEach(x => {byDay[x.d] = x});
   const H = 170, seen = new Set();
   const info = dates.map(d => {
-    const x = byDay[d], rows = al.plan[d] || [], tot = rows.reduce((a, r) => a + r.m, 0), cap = x ? x.h * 60 : 0;
+    const x = byDay[d], rows = (al.plan[d] || []).filter(r => !r.done), tot = rows.reduce((a, r) => a + r.m, 0), cap = x ? x.h * 60 : 0;
     const free = x && !x.closed ? Math.max(0, al.rem[d] || 0) : 0;
     return {d, x, rows, tot, cap, free};
   });
@@ -232,7 +254,8 @@ const selBox = (st, attrs, label) => `<button type="button" class="dv-sel ${st}"
 function dayViewModal(al, page) {
   const d = dayView; if (!d) return '';
   const x = S.app.days.find(y => y.d === d), rows = al.plan[d] || [], past = d < TODAY, closed = !!S.app.closed[d];
-  const tot = rows.reduce((a, r) => a + r.m, 0), free = x && !past && !closed ? Math.max(0, al.rem[d] || 0) : 0;
+  const act = rows.filter(r => !r.done), dn = rows.filter(r => r.done);
+  const tot = act.reduce((a, r) => a + r.m, 0), free = x && !past && !closed ? Math.max(0, al.rem[d] || 0) : 0;
   const slots = x && x.slots && x.slots.length ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : '';
   const study = new Set(S.app.days.filter(y => y.d >= TODAY && !S.app.closed[y.d]).map(y => y.d));
   const open = rows.filter(r => !r.done && !past).map(r => r.it.key);
@@ -245,7 +268,9 @@ function dayViewModal(al, page) {
     const short = it.name.startsWith(it.gName + ' · ') ? it.name.slice(it.gName.length + 3) : it.name;
     const nm = short + (it.extra ? ' · fuera del plan' : '');
     let ask = '';
-    if (!selMode && doneAsk === k) {
+    if (!selMode && doneAsk === k && it.open) {
+      ask = `<li class="dv-ask"><span class="lbl">Tarea de cada día</span><div class="row-btns"><button type="button" class="btn sm" data-dvopen="hoy" data-key="${esc(k)}">Hecha por hoy</button><button type="button" class="btn sm alt" data-dvopen="fin" data-key="${esc(k)}">Acabada del todo</button><button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></div></li>`;
+    } else if (!selMode && doneAsk === k) {
       ask = `<li class="dv-ask"><span class="lbl">¿Qué día la hiciste?</span>${chips({key: 'doneOn', id: k, value: '', options: doneDayOptions(d), label: 'Día en que la hiciste'})}
         ${datePick({key: 'doneOn', id: k, value: '', open: pick === 'doneOn|' + k, month: pickMonth, today: TODAY, label: 'Otro día', empty: 'Otro día…', allowed: v => v <= TODAY, foot: ''})}
         <button type="button" class="btn ghost sm" data-dvcancel="1">Cancelar</button></li>`;
@@ -259,15 +284,15 @@ function dayViewModal(al, page) {
       ${selMode ? (canSel ? selBox(on ? 'on' : '', `data-dvselk="${esc(k)}"`, 'Seleccionar ' + it.name) : '<span class="dv-sel off"></span>') : ''}
       <button type="button" class="dv-chk" data-dvdone="${esc(k)}" aria-pressed="${!!r.done}" aria-label="${r.done ? 'Desmarcar ' : 'Marcar hecha '}${esc(it.name)}">${CHECK}</button>
       ${!past && !r.done ? `<span class="dv-h" data-dvdrag="1" title="Arrastra para cambiar el orden" aria-hidden="true">${DOTS}</span>` : '<span class="dv-h off"></span>'}
-      <span class="dv-t"><b>${esc(nm)}</b><small>${fmt(r.m)}${part}${it.pinned === d ? ' · <span class="pin">Fija</span>' : ''}${r.done ? ' · hecha' : ''}</small></span>
-      ${!r.done && !past && !selMode ? `<button type="button" class="btn ghost sm" data-dvmove="${esc(k)}" aria-expanded="${moveAsk === k}">Mover</button>` : '<span></span>'}</li>${ask}`;
+      <span class="dv-t"><b>${esc(nm)}</b><small>${fmt(r.m)}${it.open ? ' al día · hasta que la acabes' : ''}${part}${it.pinned === d ? ' · <span class="pin">Fija</span>' : ''}${r.done ? ' · hecha' : ''}</small></span>
+      ${!r.done && !past && !selMode && !it.open ? `<button type="button" class="btn ghost sm" data-dvmove="${esc(k)}" aria-expanded="${moveAsk === k}">Mover</button>` : '<span></span>'}</li>${ask}`;
   };
   /* Lista en el orden del día, con una cabecera cada vez que empieza otra asignatura o grupo. */
   let list = '', ls = null, lg = null;
-  rows.forEach((r, i) => {
+  act.forEach((r, i) => {
     const it = r.it;
     if (it.sid !== ls) {
-      let m = 0; for (let j = i; j < rows.length && rows[j].it.sid === it.sid; j++) m += rows[j].m;
+      let m = 0; for (let j = i; j < act.length && act[j].it.sid === it.sid; j++) m += act[j].m;
       const ks = keysOf(it.sid);
       list += `<li class="dv-hd sub">${selMode && ks.length ? selBox(stOf(ks), `data-dvsel="${esc(it.sid)}"`, 'Seleccionar todo ' + it.subName) : ''}${sw(it.sid)}<b>${esc(it.subName)}</b><span class="num">${fmt(m)}</span></li>`;
       ls = it.sid; lg = null;
@@ -279,6 +304,9 @@ function dayViewModal(al, page) {
     }
     list += item(r);
   });
+  if (!act.length && dn.length) list += `<li class="dv-empty">${past ? 'Nada pendiente de este día.' : 'No quedan tareas este día.'}</li>`;
+  /* Hechas: plegadas al final, solo para desmarcar una por error. */
+  const hechas = dn.length ? `<div class="dv-hechas"><button type="button" class="dv-hbtn" data-hechas="${d}" aria-expanded="${hOpen.has(d)}"><span>Hechas</span><b class="num">${dn.length}</b><i aria-hidden="true">›</i></button>${hOpen.has(d) ? `<ul class="dv-done">${dn.map(r => `<li class="dv-r done" data-key="${esc(r.it.key)}"><button type="button" class="dv-chk" data-dvdone="${esc(r.it.key)}" aria-pressed="true" aria-label="Desmarcar ${esc(r.it.name)}">${CHECK}</button><span class="dv-h off"></span><span class="dv-t"><b>${esc(r.it.name)}</b><small>${sw(r.it.sid)}${esc(r.it.subName)} · ${fmt(r.m)}</small></span><span></span></li>`).join('')}</ul>` : ''}</div>` : '';
   let bar = '';
   if (selMode) {
     const n = sel.size, anyPin = [...sel].some(k => {const s = S.subs[k.split('/')[0]]; return s && s.pin && s.pin[k]});
@@ -288,12 +316,13 @@ function dayViewModal(al, page) {
     bar = `<div class="dv-bar">${ask}<div class="dv-bar-r"><b>${n ? n + (n === 1 ? ' seleccionada' : ' seleccionadas') : 'Toca tareas o cabeceras para seleccionarlas'}</b>
       <div class="row-btns">${n ? `<button type="button" class="btn sm" data-dvbulk="done" aria-expanded="${selAsk === 'done'}">Marcar hechas</button><button type="button" class="btn sm alt" data-dvbulk="move" aria-expanded="${selAsk === 'move'}">Mover</button>${anyPin ? '<button type="button" class="btn ghost sm" data-dvbulk="unpin">Soltar</button>' : ''}` : `<button type="button" class="btn ghost sm" data-dvbulk="all">Todas</button>`}<button type="button" class="btn ghost sm" data-dvbulk="exit">Cancelar</button></div></div></div>`;
   }
-  if (page) return {list, bar, rows, x, past, closed, tot, free, slots, open};
+  const addF = !past && !selMode ? (dvAdd ? `<div class="dv-add">${manualForm('', d)}</div>` : `<button type="button" class="btn ghost sm dv-addbtn" data-dvaddtask="1">+ Añadir tarea a este día</button>`) : '';
+  if (page) return {list, hechas, addF, bar, rows, x, past, closed, tot, free, slots, open};
   const prev = L.addDays(d, -1), next = L.addDays(d, 1);
   return `<div class="modal-bg" data-modalbg="dv"><div class="modal dv ${selMode ? 'selecting' : ''}" role="dialog" aria-modal="true" aria-label="${esc(dayLabel(d, {weekday: 'long', month: 'long'}))}">
     <div class="modal-h"><button type="button" class="icon round" data-dvgo="${prev}" aria-label="Día anterior">‹</button><h3>${dayLabel(d, {weekday: 'long', month: 'long'})}${d === TODAY ? ' · hoy' : ''}</h3><button type="button" class="icon round" data-dvgo="${next}" aria-label="Día siguiente">›</button><button type="button" class="icon round" data-dvclose="1" aria-label="Cerrar">×</button></div>
     <div class="dv-sub"><p class="sub">${x ? `${fmt(tot)} planificadas de ${fmt(x.h * 60)}${slots ? ' · ' + slots : ''}${closed ? ' · terminado' : ''}` : 'No es uno de tus días de estudio.'}</p>${open.length && !selMode ? '<button type="button" class="btn ghost sm" data-dvbulk="enter">Seleccionar</button>' : ''}</div>
-    ${rows.length ? `<ul class="dv-list" data-dvday="${d}">${list}</ul>${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para cambiar el orden. «Mover» la fija en otro día. Mantén pulsada una tarea o usa «Seleccionar» para elegir varias.</p>'}` : `<div class="empty">${x ? 'No hay tareas este día.' : past ? 'Día pasado sin estudio.' : 'Añádelo para que el plan le reparta tareas.'}</div>`}
+    ${rows.length ? `<ul class="dv-list" data-dvday="${d}">${list}</ul>${hechas}${addF}${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para cambiar el orden. «Mover» la fija en otro día. Mantén pulsada una tarea o usa «Seleccionar» para elegir varias.</p>'}` : `<div class="empty">${x ? 'No hay tareas este día.' : past ? 'Día pasado sin estudio.' : 'Añádelo para que el plan le reparta tareas.'}</div>${x ? addF : ''}`}
     ${bar || `<div class="modal-f">${free ? `<span class="sub">Libre: ${fmt(free)}</span>` : '<span></span>'}<div class="row-btns">${x && !past ? `<button type="button" class="btn ghost sm" data-dvslots="${d}">Editar franjas</button>` : ''}${!x && !past ? `<button type="button" class="btn sm" data-dvadd="${d}">Añadir este día</button>` : ''}<button type="button" class="btn sm" data-dvclose="1">Listo</button></div></div>`}
   </div></div>`;
 }
@@ -314,7 +343,7 @@ function renderSimple(al) {
 function renderSimpleDay(al) {
   const d = dayView, p = dayViewModal(al, true), isToday = d === TODAY, r = S.app.run;
   const done = p.rows.filter(x => x.done), doneM = done.reduce((a, x) => a + x.m, 0);
-  const pct = p.tot ? Math.round(100 * doneM / p.tot) : 0, dt = new Date(d + 'T00:00:00Z');
+  const all = p.tot + doneM, pct = all ? Math.round(100 * doneM / all) : 0, dt = new Date(d + 'T00:00:00Z');
   const wd = dt.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'long'});
   let cta = '';
   if (r) cta = '';
@@ -322,26 +351,27 @@ function renderSimpleDay(al) {
   else if (isToday && !p.x) cta = `<button type="button" class="sp-cta" data-act="go">Empezar sesión</button><p class="sub sp-note">Hoy no está entre tus días. Al empezar se añade con tu horario.</p>`;
   else if (isToday && p.closed) cta = `<button type="button" class="sp-cta alt" data-sp="resumen" data-day="${d}">Ver el resumen de hoy</button><button type="button" class="btn ghost sp-wide" data-act="go">Seguir estudiando hoy</button>`;
   else if (d < TODAY) cta = `<button type="button" class="sp-cta alt" data-sp="resumen" data-day="${d}">Ver el resumen del día</button>`;
-  const list = p.rows.length ? `<div class="sp-listh"><b>Tareas</b>${p.open.length && !selMode ? '<button type="button" class="btn ghost sm" data-dvbulk="enter">Seleccionar</button>' : ''}</div><ul class="dv-list" data-dvday="${d}">${p.list}</ul>${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para ordenarlas. Mantén pulsada una tarea para elegir varias.</p>'}`
-    : `<div class="empty">${p.x ? 'No hay tareas este día.' : d < TODAY ? 'Día pasado sin estudio.' : 'No es uno de tus días de estudio.'}</div>${!p.x && d >= TODAY ? `<button type="button" class="btn ghost sp-wide" data-dvadd="${d}">Añadir este día</button>` : ''}`;
+  const list = p.rows.length ? `<div class="sp-listh"><b>Tareas</b>${p.open.length && !selMode ? '<button type="button" class="btn ghost sm" data-dvbulk="enter">Seleccionar</button>' : ''}</div><ul class="dv-list" data-dvday="${d}">${p.list}</ul>${p.hechas}${p.addF}${selMode ? '' : '<p class="sub dv-help">Toca el círculo para marcarla hecha. Arrastra los puntos para ordenarlas. Mantén pulsada una tarea para elegir varias.</p>'}`
+    : `<div class="empty">${p.x ? 'No hay tareas este día.' : d < TODAY ? 'Día pasado sin estudio.' : 'No es uno de tus días de estudio.'}</div>${p.x ? p.addF : ''}${!p.x && d >= TODAY ? `<button type="button" class="btn ghost sp-wide" data-dvadd="${d}">Añadir este día</button>` : ''}`;
   $('main').innerHTML = `<div class="sp ${spAnim}" data-swipe="1">
     <div class="sp-head"><button type="button" class="icon round" data-spgo="-1" aria-label="Día anterior">‹</button>
       <div class="sp-date"><b>${isToday ? 'Hoy' : wd[0].toUpperCase() + wd.slice(1)}</b><span>${dayLabel(d, {weekday: isToday ? 'long' : undefined, month: 'long'})}</span></div>
       <button type="button" class="icon round" data-spgo="1" aria-label="Día siguiente">›</button></div>
     ${isToday ? '' : '<div class="sp-back"><button type="button" class="btn ghost sm" data-spgo="0">Volver a hoy</button></div>'}
-    ${p.x ? `<div class="sp-sum"><div><b>${fmt(p.tot)}</b><span>de estudio${p.slots ? ' · ' + p.slots : ''}</span></div><div class="sp-prog" role="img" aria-label="${pct} % hecho"><i style="width:${pct}%"></i></div><small>${done.length} de ${p.rows.length} ${p.rows.length === 1 ? 'tarea hecha' : 'tareas hechas'}${p.free ? ' · libre ' + fmt(p.free) : ''}</small></div>` : ''}
+    ${p.x ? `<div class="sp-sum"><div><b>${fmt(all)}</b><span>de estudio${p.slots ? ' · ' + p.slots : ''}</span></div><div class="sp-prog" role="img" aria-label="${pct} % hecho"><i style="width:${pct}%"></i></div><small>${done.length} de ${p.rows.length} ${p.rows.length === 1 ? 'tarea hecha' : 'tareas hechas'}${p.free ? ' · libre ' + fmt(p.free) : ''}</small></div>` : ''}
     ${cta}${list}${p.bar}</div>`;
   spAnim = '';
 }
 function renderSimpleSession(al) {
   const r = S.app.run, now = Date.now(), c = L.clock(S, now, TODAY), it = c.it, ph = r.phase, brk = ph === 'break', pa = ph === 'pause';
-  const base = pa ? r.pb.phase : (brk ? r.back : ph), toRev = base === 'do' && it && it.rev;
+  const base = pa ? r.pb.phase : (brk ? r.back : ph), toRev = base === 'do' && it && it.rev, op = it && it.open;
   const B = (act, label, cls = '') => `<button type="button" class="sp-btn ${cls}" data-act="${act}">${label}</button>`;
   let acts;
   if (pa) acts = B('unpause', 'Reanudar', 'main') + B('end', 'Acabar día', 'ghost');
   else if (parar) acts = B('pause', 'Pausa', 'main') + B('end', 'Acabar día', 'alt') + B('noparar', 'Cancelar', 'ghost');
   else if (ph === 'free') acts = `<button type="button" class="sp-btn main" data-showextra="1">Tarea fuera del plan</button>` + B('parar', 'Parar', 'ghost');
   else if (brk) acts = B('resume', 'Reanudar', 'main') + B('parar', 'Parar', 'ghost');
+  else if (op) acts = B('next', 'Por hoy', 'main') + B('finopen', 'Acabada', 'alt') + B('break', 'Descanso', 'alt') + B('parar', 'Parar', 'ghost');
   else acts = B('next', toRev ? 'Hecha: a revisar' : ph === 'review' ? 'Revisión hecha' : 'Tarea hecha', 'main') + B('break', 'Descanso', 'alt') + B('parar', 'Parar', 'ghost');
   const pend = al.pend.filter(p => p.it.key !== r.key).slice(0, 80), nxt = L.nextKey(S, r.day, r.sid, r.key);
   const stale = r.day < TODAY ? `<div class="banner"><span>Esta sesión sigue abierta desde el ${dayLabel(r.day)}.</span><div class="row-btns"><button class="btn alt sm" data-act="carry">Seguir hoy</button><button class="btn alt sm" data-act="discard">Cerrarla sin contar el último tramo</button></div></div>` : '';
@@ -462,7 +492,7 @@ function dayTipHTML(d) {
   if (!x) body = `<p>${past ? 'Día pasado sin estudio.' : 'Libre. Pulsa para añadirlo.'}</p>` + (!past && sch.length ? `<p class="mut">Tu horario de los ${plural(DAYS[wi].toLowerCase())}: ${sch.map(y => y.ini + '–' + y.fin).join(' · ')}</p>` : '');
   else {
     const al = allocate(S, TODAY), by = {};
-    (al.plan[d] || []).forEach(r => {by[r.it.sid] = (by[r.it.sid] || 0) + r.m});
+    (al.plan[d] || []).filter(r => !r.done).forEach(r => {by[r.it.sid] = (by[r.it.sid] || 0) + r.m});
     const plan = Object.keys(by).map(id => `<li>${sw(id)}${esc(S.subs[id] ? S.subs[id].nombre : id)}<b class="num">${fmt(by[id])}</b></li>`).join('');
     body = `<div class="tip-big"><b>${fmt(x.h * 60)}</b><span>de estudio${S.app.closed[d] ? ' · terminado' : ''}</span></div>
       <p>${x.slots && x.slots.length ? x.slots.map(y => y.ini + '–' + y.fin).join(' · ') : 'Sin franjas: horas a mano'}</p>
@@ -525,15 +555,20 @@ function renderSubject(al, ob) {
     return `<label class="lr ${r === t ? 'tg' : ''}" for="tg-${i}"><input type="radio" name="target" id="tg-${i}" data-target="${esc(r.key)}" ${r === t ? 'checked' : ''}><span class="w"><span>${chip(r.lvl)}${esc(r.name)}</span><small>${r.n} ${r.n === 1 ? 'tarea' : 'tareas'} · ${fmt(r.m)}</small></span>${st}</label>`;
   }).join('') : '';
   const groups = s.grupos.map((g, i) => {
-    const l = items.filter(x => x.gid === g.id), rec = g.tipo === 'recurrente', dia = g.tipo === 'diaria', open = expanded.has(scope + g.id), lv = rec || dia || g.sim ? [l[0] ? l[0].lvl : g.prio] : [...new Set(l.map(x => x.lvl))], mix = lv.length > 1, m = rec ? g.minSem : dia ? g.minDia : (g.tareas||[]).reduce((a, t) => a + (+s.mins[scope + '/' + t.id] || t.min), 0);
-    const sub = rec ? `${fmt(g.minSem)} por semana` : dia ? `${fmt(g.minDia)} al día${g.det?' · '+esc(g.det):''}` : `${(g.tareas||[]).length} tareas · ${fmt(m)}${g.freq ? ' · ' + esc(g.freq) : ''}`;
+    const l = items.filter(x => x.gid === g.id), rec = g.tipo === 'recurrente', dia = g.tipo === 'diaria', open = expanded.has(scope + g.id), lv = rec || dia || g.sim ? [l[0] ? l[0].lvl : g.prio] : [...new Set(l.map(x => x.lvl))], mix = lv.length > 1, m = rec ? g.minSem : dia ? g.minDia : (g.tareas||[]).reduce((a, t) => a + (t.minDia ? 0 : +s.mins[scope + '/' + t.id] || t.min), 0);
+    const ts = g.tareas || [], nT = ts.length, isD = t => !!(s.done && s.done[scope + '/' + t.id]), nD = ts.filter(isD).length;
+    const mLeft = ts.filter(t => !isD(t) && !t.minDia).reduce((a, t) => a + (+s.mins[scope + '/' + t.id] || t.min), 0), allD = nT > 0 && nD === nT;
+    const cnt = `${nT} ${nT === 1 ? 'tarea' : 'tareas'}`;
+    const nOpen = ts.filter(t => t.minDia && !isD(t)).length;
+    const sub = rec ? `${fmt(g.minSem)} por semana` : dia ? `${fmt(g.minDia)} al día${g.det?' · '+esc(g.det):''}` : (allD ? `${cnt} · <span class="okc">${nT === 1 ? 'hecha' : 'todas hechas'}</span>` : nD ? `${cnt} · ${nD} ${nD === 1 ? 'hecha' : 'hechas'}${mLeft ? ' · quedan ' + fmt(mLeft) : ''}` : `${cnt}${m ? ' · ' + fmt(m) : ''}`) + (nOpen ? ` · ${nOpen} de cada día` : '') + (g.freq ? ' · ' + esc(g.freq) : '');
     const tasks = !rec && !dia ? (g.tareas||[]).map(t => {
-      const k = scope + '/' + t.id;
-      return `<div class="si"><div class="w"><span>${esc(t.nombre)}</span><small>${esc(t.det)}${t.limite ? ' · hasta ' + dayLabel(t.limite) : ''}${t.dep.length ? ' · tras ' + t.dep.map(esc).join(', ') : ''}</small></div>
-      <div class="si-ctl">${stepper({key: 'min', id: k, base: t.min, value: +s.mins[k] || t.min, step: 5, min: 5, max: 900, fmt: v => v + ' min', label: 'Minutos de ' + t.nombre, size: 'sm'})}
+      const k = scope + '/' + t.id, dn = s.done && s.done[k];
+      const chk = g.sim ? '' : `<button type="button" class="dv-chk" data-sdone="${esc(k)}" aria-pressed="${!!dn}" aria-label="${dn ? 'Desmarcar ' : 'Marcar hecha '}${esc(t.nombre)}">${CHECK}</button>`;
+      return `<div class="si ${dn ? 'done' : ''}">${chk}<div class="w"><span>${esc(t.nombre)}</span><small>${dn ? `<span class="okc">${t.minDia ? 'Acabada' : 'Hecha'}${L.isDate(dn) ? ' el ' + dayLabel(dn) : ''}</span>${t.det ? ' · ' : ''}` : t.minDia ? `Cada día hasta acabarla${t.desde ? ', desde el ' + dayLabel(t.desde) : ''}${t.det ? ' · ' : ''}` : ''}${esc(t.det)}${t.limite && !dn ? ' · hasta ' + dayLabel(t.limite) : ''}${t.dep.length ? ' · tras ' + t.dep.map(esc).join(', ') : ''}</small></div>
+      <div class="si-ctl">${stepper({key: 'min', id: k, base: t.minDia || t.min, value: +s.mins[k] || t.minDia || t.min, step: 5, min: 5, max: 900, fmt: v => v + (t.minDia ? ' min/día' : ' min'), label: (t.minDia ? 'Minutos al día de ' : 'Minutos de ') + t.nombre, size: 'sm'})}
       ${g.sim ? '' : seg({key: 'ilvl', id: k, value: s.lvl[k] ?? t.prio ?? g.prio, options: PRIO4, label: 'Prioridad de ' + t.nombre, size: 'xs'})}${t.manual ? `<button class="icon round" data-delman="${esc(k)}" aria-label="Quitar ${esc(t.nombre)}">×</button>` : ''}</div></div>`;
     }).join('') : '';
-    return `<div class="pr grp">${rec || dia ? '<span class="exp"></span>' : `<button class="exp" data-exp="${esc(g.id)}" aria-expanded="${open}" aria-label="Desplegar ${esc(g.nombre)}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${open ? 'M5 8l5 5 5-5' : 'M8 5l5 5-5 5'}"/></svg></button>`}
+    return `<div class="pr grp ${allD ? 'done' : ''}">${rec || dia ? '<span class="exp"></span>' : `<button class="exp" data-exp="${esc(g.id)}" aria-expanded="${open}" aria-label="Desplegar ${esc(g.nombre)}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${open ? 'M5 8l5 5 5-5' : 'M8 5l5 5-5 5'}"/></svg></button>`}
      <div class="w"><b>${esc(g.nombre)}</b><small>${sub}</small></div>
      <div class="pr-ctl">${dia ? toggle({key:'diariadone',id:g.id,value:!!(s.done&&s.done[scope+'/'+g.id]),label:'Marcar como acabada'}) : seg({key: 'glvl', id: g.id, value: mix ? '' : lv[0], options: PRIO4, label: 'Prioridad de ' + g.nombre + (mix ? ' (mixta)' : ''), size: 'xs'})}
      <div class="updown"><button class="icon round" data-gmv="${esc(g.id)}" data-d="-1" aria-label="Subir ${esc(g.nombre)}" ${i ? '' : 'disabled'}>↑</button><button class="icon round" data-gmv="${esc(g.id)}" data-d="1" aria-label="Bajar ${esc(g.nombre)}" ${i < s.grupos.length - 1 ? '' : 'disabled'}>↓</button></div></div></div>
@@ -552,13 +587,16 @@ function renderSubject(al, ob) {
    <aside class="side"><h2>Hasta dónde llegas</h2><p class="sub">Elige hasta qué fila es tu objetivo en ${esc(s.nombre)}.</p><div class="lad">${lad || '<div class="empty">Nada pendiente.</div>'}</div></aside></div>`;
 }
 function subOptions() {return S.app.order.map(id => ({v: id, label: S.subs[id].nombre, sw: colorOf(id)}))}
-function manualForm(fixed) {
+function manualForm(fixed, day) {
   if (!fixed && !S.subs[ma.sid]) ma.sid = S.app.order[0] || '';
+  const dia = ma.tipo === 'dia';
   return `<div class="addbox">${fixed ? '' : `<div class="field wide"><span class="lbl">Asignatura</span>${chips({key: 'maSub', value: ma.sid, options: subOptions(), label: 'Asignatura de la tarea'})}</div>`}
    <div class="field wide"><label class="lbl" for="ma-nom">Tarea</label><input id="ma-nom" type="text" value="${esc(ma.nom)}" placeholder="Qué hay que hacer"></div>
-   <div class="field"><span class="lbl">Minutos aprox.</span>${stepper({key: 'maMin', value: ma.min, step: 5, min: 5, max: 600, fmt: v => v + ' min', label: 'Minutos aproximados'})}</div>
+   <div class="field wide"><span class="lbl">Cuándo</span>${seg({key: 'maTipo', value: ma.tipo, options: TIPO, label: 'Cuándo se hace'})}</div>
+   <div class="field"><span class="lbl">${dia ? 'Rato al día' : 'Minutos aprox.'}</span>${stepper({key: 'maMin', value: ma.min, step: 5, min: 5, max: 600, fmt: v => v + (dia ? ' min al día' : ' min'), label: dia ? 'Minutos al día' : 'Minutos aproximados'})}</div>
    <div class="field"><span class="lbl">Prioridad</span>${seg({key: 'maPri', value: ma.pri, options: PRIO, label: 'Prioridad de la tarea'})}</div>
-   <div class="row-btns"><button class="btn" data-addman="${esc(fixed || '')}">Añadir tarea</button><span class="status neg">${esc(formErr)}</span></div></div>`;
+   ${dia ? `<p class="sub">Sale cada día de estudio${day ? ' desde el ' + dayLabel(day) : ''} con ese rato, hasta que la marques acabada.</p>` : day ? `<p class="sub">Se queda fija el ${dayLabel(day)}.</p>` : ''}
+   <div class="row-btns"><button class="btn" data-addman="${esc(fixed || '')}"${day ? ` data-day="${day}"` : ''}>Añadir tarea</button>${day ? '<button type="button" class="btn ghost" data-dvaddtask="0">Cancelar</button>' : ''}<span class="status neg">${esc(formErr)}</span></div></div>`;
 }
 
 /* ---------- Plan ---------- */
@@ -572,15 +610,16 @@ function rowHTML(r, day) {
 function renderPlan(al) {
   const f = r => scope === 'general' || r.it.sid === scope, past = (S.app.days.length ? al.days : []).map(x => ({...x, raw: S.app.days.find(y => y.d === x.d)}));
   const cards = past.map(x => {
-    const rows = al.plan[x.d].filter(f), capM = x.h * 60, sum = {}; rows.forEach(r => sum[r.it.sid] = (sum[r.it.sid] || 0) + r.m);
+    const all = al.plan[x.d].filter(f), rows = all.filter(r => !r.done), dn = all.filter(r => r.done), capM = x.h * 60, sum = {}; rows.forEach(r => sum[r.it.sid] = (sum[r.it.sid] || 0) + r.m);
     const tot = rows.reduce((a, r) => a + r.m, 0), free = x.closed ? 0 : al.rem[x.d];
-    if (scope !== 'general' && !rows.length) return '';
+    if (scope !== 'general' && !all.length) return '';
     const sl = x.raw && x.raw.slots && x.raw.slots.length ? x.raw.slots.map(y => y.ini + '–' + y.fin).join(' · ') : '';
     return `<article class="session"><div class="s-head"><h3>${dayLabel(x.d, {weekday: 'long', month: 'long'})}</h3><span class="num">${sl ? sl + ' · ' : ''}${fmt(tot)} de ${fmt(capM)}</span>
      ${x.d < TODAY ? '<span class="num">Pasado</span>' : toggle({key: 'closed', id: x.d, value: !!S.app.closed[x.d], label: 'Terminado'})}</div>
      <div class="fill">${Object.keys(sum).map(id => `<i style="width:${capM ? Math.min(100, 100 * sum[id] / capM) : 0}%;background:${colorOf(id)}"></i>`).join('')}</div>
      ${al.warn && al.warn[x.d] ? `<div class="warn">Los mínimos suman ${fmt(al.warn[x.d].tot)} y hay ${fmt(al.warn[x.d].cap)}. Hoy no se aplican.</div>` : ''}
-     ${rows.length ? '<div class="cols"><span>Tarea</span><span>Estimado</span><span>Real (min)</span></div>' : ''}${dayBlocks(S.app, x.raw, al.plan[x.d]).filter(b => scope === 'general' || b.sid === scope).map(b => `<div class="blk">${sw(b.sid)}${esc(b.name)}<span class="num">${b.ini !== null ? toTime(b.ini) + ' a ' + toTime(b.fin) + ' · ' : ''}${fmt(b.m)}</span></div>${b.rows.map(r => rowHTML(r, x.d)).join('')}`).join('')}
+     ${rows.length ? '<div class="cols"><span>Tarea</span><span>Estimado</span><span>Real (min)</span></div>' : ''}${dayBlocks(S.app, x.raw, rows).filter(b => scope === 'general' || b.sid === scope).map(b => `<div class="blk">${sw(b.sid)}${esc(b.name)}<span class="num">${b.ini !== null ? toTime(b.ini) + ' a ' + toTime(b.fin) + ' · ' : ''}${fmt(b.m)}</span></div>${b.rows.map(r => rowHTML(r, x.d)).join('')}`).join('')}
+     ${dn.length ? `<div class="dv-hechas plan"><button type="button" class="dv-hbtn" data-hechas="${x.d}" aria-expanded="${hOpen.has(x.d)}"><span>Hechas</span><b class="num">${dn.length}</b><i aria-hidden="true">›</i></button>${hOpen.has(x.d) ? dn.map(r => rowHTML(r, x.d)).join('') : ''}</div>` : ''}
      ${free > 0 && scope === 'general' ? `<div class="free">Libre: ${fmt(free)}</div>` : ''}</article>`;
   }).join('');
   const lost = al.lost.filter(l => scope === 'general' || l.it.sid === scope);
@@ -598,7 +637,11 @@ const PHASE = {do: 'Hacer', review: 'Revisar', break: 'Descanso', pause: 'Pausa'
 const STATE = {do: 'Estudiando', review: 'Revisando', break: 'Descanso', pause: 'En pausa', free: 'Sin tareas'};
 function extraForm() {
   if (!S.subs[ex.sid]) ex.sid = S.app.run && S.subs[S.app.run.sid] ? S.app.run.sid : (S.app.order[0] || '');
-  return `<div class="addbox"><div class="field wide"><span class="lbl">Asignatura</span>${chips({key: 'exSub', value: ex.sid, options: subOptions(), label: 'Asignatura'})}</div><div class="field wide"><label class="lbl" for="ex-nom">Qué vas a hacer</label><input id="ex-nom" type="text" value="${esc(ex.nom)}"></div><div class="row-btns"><button class="btn" data-extra="1">Empezar con cronómetro</button><span class="status neg">${esc(formErr)}</span></div></div>`;
+  const dia = ex.tipo === 'dia';
+  return `<div class="addbox"><div class="field wide"><span class="lbl">Asignatura</span>${chips({key: 'exSub', value: ex.sid, options: subOptions(), label: 'Asignatura'})}</div><div class="field wide"><label class="lbl" for="ex-nom">Qué vas a hacer</label><input id="ex-nom" type="text" value="${esc(ex.nom)}"></div>
+   <div class="field wide"><span class="lbl">Cuánto dura</span>${seg({key: 'exTipo', value: ex.tipo, options: [{v: 'hoy', label: 'Solo ahora'}, {v: 'dia', label: 'Varios días'}], label: 'Cuánto dura'})}</div>
+   ${dia ? `<div class="field"><span class="lbl">Rato al día</span>${stepper({key: 'exMin', value: ex.min, step: 5, min: 5, max: 600, fmt: v => v + ' min al día', label: 'Minutos al día'})}</div><p class="sub">Seguirá saliendo cada día hasta que pulses «Acabada».</p>` : '<p class="sub">Sin tiempo previsto: cuenta lo que tardes y se cierra al acabar la sesión.</p>'}
+   <div class="row-btns"><button class="btn" data-extra="1">${dia ? 'Empezar' : 'Empezar con cronómetro'}</button><span class="status neg">${esc(formErr)}</span></div></div>`;
 }
 function renderSession(al) {
   const v = $('main'), r = S.app.run, now = Date.now();
@@ -614,19 +657,20 @@ function renderSession(al) {
      <div class="actions"><button class="btn" data-act="go">Empezar día</button></div></div>`; return;
   }
   const c = L.clock(S, now, TODAY), it = c.it, ph = r.phase, brk = ph === 'break', pa = ph === 'pause', from = r.back, nxt = L.nextKey(S, r.day, r.sid, r.key);
-  const base = pa ? r.pb.phase : (brk ? from : ph), toRev = base === 'do' && it && it.rev, lbl = toRev ? 'Siguiente: revisar' : 'Tarea acabada';
+  const base = pa ? r.pb.phase : (brk ? from : ph), toRev = base === 'do' && it && it.rev, op = it && it.open, lbl = op ? 'Por hoy' : toRev ? 'Siguiente: revisar' : 'Tarea acabada';
+  const fin = op ? '<button class="btn alt" data-act="finopen">Acabada</button>' : '';
   let b = '';
   if (pa) b = '<button class="btn" data-act="unpause">Reanudar</button><button class="btn ghost" data-act="end">Acabar día</button>';
   else if (parar) b = '<button class="btn" data-act="pause">Pausa</button><button class="btn alt" data-act="end">Acabar día</button><button class="btn ghost" data-act="noparar">Cancelar</button>';
   else {
-    if (ph === 'do' || ph === 'review') b = `<button class="btn" data-act="next">${lbl}</button><button class="btn alt" data-act="break">Descanso</button>`;
+    if (ph === 'do' || ph === 'review') b = `<button class="btn" data-act="next">${lbl}</button>${fin}<button class="btn alt" data-act="break">Descanso</button>`;
     if (brk) b = `<button class="btn" data-act="resume">Reanudar</button><button class="btn alt" data-act="next">${lbl}</button>`;
     b += '<button class="btn ghost" data-act="parar">Parar</button>';
   }
   const stale = r.day < TODAY ? `<div class="banner"><span>Esta sesión sigue abierta desde el ${dayLabel(r.day)}.</span><div class="row-btns"><button class="btn alt" data-act="carry">Seguir hoy</button><button class="btn alt" data-act="discard">Cerrarla sin contar el último tramo</button></div></div>` : '';
   const pend = al.pend.filter(p => p.it.key !== r.key).slice(0, 80);
   const changes = nxt && nxt.sid !== r.sid;
-  v.innerHTML = stale + `<div class="focus" data-phase="${ph === 'free' ? '' : ph}"><div class="state"><i></i>${STATE[ph]}</div><div class="phase">${it ? esc(it.subName) : ''}${brk ? ' · parado en ' + PHASE[from].toLowerCase() : ''}${pa ? ' · parado en ' + PHASE[base === 'break' ? 'break' : base].toLowerCase() : ''}${it && it.extra ? ' · fuera del plan' : ''}</div>
+  v.innerHTML = stale + `<div class="focus" data-phase="${ph === 'free' ? '' : ph}"><div class="state"><i></i>${STATE[ph]}</div><div class="phase">${it ? esc(it.subName) : ''}${brk ? ' · parado en ' + PHASE[from].toLowerCase() : ''}${pa ? ' · parado en ' + PHASE[base === 'break' ? 'break' : base].toLowerCase() : ''}${it && it.extra ? ' · fuera del plan' : ''}${op ? ' · ' + fmt(it.m) + ' al día hasta que la acabes' : ''}</div>
     <h2>${it ? esc(it.name) : 'Has acabado lo previsto'}</h2>${it && it.det ? `<p>${esc(it.det)}</p>` : ''}${it ? '' : '<p>Si sigues estudiando, añade abajo lo que vas a hacer. Si no, pulsa Parar.</p>'}
     <div class="big" id="bigT"></div><div class="bigsub" id="bigS"></div><div class="actions">${b}</div></div>
    <div class="minis"><div><small>Estudio hoy</small><b id="miStudy"></b></div><div><small>Descanso hoy</small><b id="miBreak"></b></div><div><small>Esta tarea</small><b id="miTask"></b></div><div><small>${changes ? 'Después cambias a' : 'Después'}</small><span class="nx">${nxt ? esc(nxt.subName) + ' · ' + esc(nxt.name) : 'Nada más pendiente'}</span></div></div>
@@ -738,11 +782,14 @@ function applySet(key, id, val, el) {
     case 'maSub': ma.sid = val; render(); return;
     case 'maMin': ma.min = n; render(); return;
     case 'maPri': ma.pri = n; render(); return;
+    case 'maTipo': ma.tipo = val; render(); return;
+    case 'exTipo': ex.tipo = val; render(); return;
+    case 'exMin': ex.min = n; render(); return;
     case 'exSub': ex.sid = val; render(); return;
     case 'chartN': chartN = n; uiPref.n = n; saveUi(); render(); return;
-    case 'doneOn': {const it = L.findItem(S, id, TODAY); if (it) L.markDone(S, it, val, +S.subs[it.sid].real[it.key] || 0); doneAsk = null; pick = null; break}
+    case 'doneOn': {const it = L.findItem(S, id, TODAY); if (it) markWithUndo([[it, val]]); doneAsk = null; pick = null; break}
     case 'moveTo': {L.pinTask(S, id, val); moveAsk = null; pick = null; setStatus('Tarea fijada el ' + dayLabel(val) + '.'); break}
-    case 'doneOnSel': {for (const k of sel) {const it = L.findItem(S, k, TODAY); if (it && !it.done) L.markDone(S, it, val, +S.subs[it.sid].real[it.key] || 0)} exitSel(); pick = null; break}
+    case 'doneOnSel': {const l = []; for (const k of sel) {const it = L.findItem(S, k, TODAY); if (it && !it.done) l.push([it, val])} markWithUndo(l); exitSel(); pick = null; break}
     case 'moveToSel': {const n = sel.size; for (const k of sel) L.pinTask(S, k, val); exitSel(); pick = null; setStatus((n === 1 ? 'Tarea fijada' : n + ' tareas fijadas') + ' el ' + dayLabel(val) + '.'); break}
     case 'switchTask': menuOpen = null; L.switchTask(S, val, Date.now()); commit(); return;
     default: return;
@@ -790,7 +837,7 @@ document.addEventListener('change', e => {
   const el = e.target, d = el.dataset, num = parseFloat(el.value);
   if (d.done) {
     const it = L.findItem(S, d.done, TODAY); if (!it) return;
-    if (el.checked) L.markDone(S, it, d.day, +S.subs[it.sid].real[it.key] || 0); else L.unmarkDone(S, it); touch();
+    if (el.checked) markWithUndo([[it, d.day]]); else L.unmarkDone(S, it); touch();
   }
   else if (d.real) {const sid = d.real.split('/')[0], s = S.subs[sid], v = Math.max(0, num || 0); if (v) s.real[d.real] = v; else delete s.real[d.real]; touch()}
   else if (d.target) {curSub().target = d.target; touch()}
@@ -817,6 +864,13 @@ document.addEventListener('click', e => {
   if (d.spgo !== undefined) {const k = +d.spgo; spGo(k === 0 ? TODAY : L.addDays(dayView || TODAY, k), k === 0 ? (dayView > TODAY ? -1 : 1) : k); return}
   if (d.spmore) {spMore = !spMore; render(); return}
   if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
+  if (d.undo) {undoDone(); return}
+  if (d.dvopen) {const it = L.findItem(S, d.key, TODAY); if (it) markWithUndo([[it, dayView && dayView <= TODAY ? dayView : TODAY, d.dvopen === 'fin']]); doneAsk = null; commit(); return}
+  if (d.sdone) {
+    const [ssid, tid] = d.sdone.split('/'), ss = S.subs[ssid], tt = ss && ss.grupos.flatMap(g => g.tareas || []).find(x => x.id === tid);
+    if (tt && tt.minDia) {const pseudo = {sid: ssid, key: d.sdone, name: tt.nombre, subName: ss.nombre}; if (ss.done[d.sdone]) delete ss.done[d.sdone]; else markWithUndo([[pseudo, TODAY]]); commit(); return}
+    const it = L.findItem(S, d.sdone, TODAY); if (!it) return; if (it.done) {L.unmarkDone(S, it); touch()} else {markWithUndo([[it, TODAY]]); commit()} return}
+  if (d.hechas) {hOpen.has(d.hechas) ? hOpen.delete(d.hechas) : hOpen.add(d.hechas); render(); return}
   if (d.toast) {clearTimeout(toastT); $('toast').hidden = true; $('toast').innerHTML = ''; return}
   if (d.notif) {
     if (d.notif === 'test') {showToast({title: 'Prueba de La Hoja', body: 'Así te avisará. Minimiza la app para ver la notificación del sistema.'}); setTimeout(() => fireAlert({kind: 'prueba', title: 'Prueba de La Hoja', body: 'Los avisos del sistema funcionan.'}), 4000); return}
@@ -867,15 +921,19 @@ document.addEventListener('click', e => {
   else if (d.addman !== undefined) {
     const sid = d.addman || ma.sid, nom = ma.nom.trim();
     if (!sid || !nom || !(ma.min > 0)) {formErr = 'Pon nombre y minutos aproximados.'; render(); return}
-    formErr = ''; L.addManual(S, sid, {nombre: nom, min: ma.min, prio: ma.pri}, Date.now()); ma.nom = ''; planAdd = false; commit();
+    const day = d.day && d.day >= TODAY ? d.day : '', dia = ma.tipo === 'dia';
+    formErr = ''; const k = L.addManual(S, sid, dia ? {nombre: nom, minDia: ma.min, prio: ma.pri, desde: day} : {nombre: nom, min: ma.min, prio: ma.pri}, Date.now());
+    if (day && !dia) {if (!S.app.days.some(y => y.d === day)) S.app.days.push(makeDay(S.app, day)); L.pinTask(S, k, day)}
+    ma.nom = ''; planAdd = false; dvAdd = false; commit();
   }
   else if (d.planadd) {planAdd = true; formErr = ''; render()}
+  else if (d.dvaddtask !== undefined) {dvAdd = d.dvaddtask === '1'; formErr = ''; doneAsk = moveAsk = null; render()}
   else if (d.delman) {L.removeManual(S, d.delman); commit()}
   else if (d.showextra) {showExtra = !showExtra; formErr = ''; render()}
   else if (d.extra) {
     const nom = ex.nom.trim();
     if (!nom || !ex.sid) {formErr = 'Escribe qué vas a hacer.'; render(); return}
-    formErr = ''; L.startExtra(S, ex.sid, nom, Date.now()); ex.nom = ''; showExtra = false; commit(); wake();
+    formErr = ''; if (ex.tipo === 'dia') L.startOpen(S, ex.sid, nom, ex.min, Date.now()); else L.startExtra(S, ex.sid, nom, Date.now()); ex.nom = ''; showExtra = false; commit(); wake();
   }
   else if (d.applysched) {S.app.days = S.app.days.map(x => {if (x.d < TODAY) return x; const n = makeDay(S.app, x.d); return n.slots ? n : x}); commit()}
   else if (d.update) {scope = 'nueva'; render()}
@@ -886,6 +944,7 @@ document.addEventListener('click', e => {
     const now = Date.now();
     if (d.act === 'go') {if (!S.app.run) {L.startDay(S, TODAY, now); wake()} view = 'sesion'; sp = 'sesion'; spMore = false}
     else if (d.act === 'next') {L.nextStep(S, now); wake()}
+    else if (d.act === 'finopen') {L.finishOpen(S, now); wake()}
     else if (d.act === 'break') L.goBreak(S, now);
     else if (d.act === 'resume') {L.resumeWork(S, now); wake()}
     else if (d.act === 'end') {const day = S.app.run && S.app.run.day; L.endDay(S, now); parar = false; sp = 'resumen'; spSum = day || TODAY}
