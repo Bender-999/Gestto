@@ -1,5 +1,10 @@
 # Historial
 
+## Versión 2.5 (26 de noviembre de 2026)
+
+- Las tareas hechas salen de las listas y del gráfico. Aviso con «Deshacer» y sección «Hechas» plegada al final de cada día.
+- Corregido: en la asignatura, «Prioridades y tiempos» no enseñaba las tareas hechas. Ahora cada grupo dice cuántas lleva y cada tarea tiene su casilla.
+
 ## Origen (noviembre de 2026)
 
 Empezó el 3 de noviembre de 2026 como un plan para preparar el examen de Estructuras (Tema 1, ETSIAE) y acabó siendo un planificador general para varias asignaturas y proyectos, publicado como artefacto en Claude.

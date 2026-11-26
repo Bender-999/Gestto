@@ -41,6 +41,8 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Qué avisa | «Tiempo cumplido» cuando la tarea llega a lo estimado, «Toca descanso» tras 50 min de estudio seguido y «Se acabó el descanso» a los 10 min. Una pausa o un hueco de 10 min o más cuenta como descanso. En pausa no avisa. Sin aviso de pausa olvidada |
 | Cómo avisa | Si la estás mirando, un aviso arriba dentro de la app (y vibración donde se pueda). En Windows, con permiso, notificación del sistema si la app está detrás o minimizada; se activa desde el pie de la página. En el iPhone no: la app se para en segundo plano. Si vuelves a la app en los 10 min siguientes, el aviso sale al abrirla |
 | Cuenta | En Configuración › General › Cuenta: con quién está sincronizado y el botón Salir. Arriba de la página solo sale un aviso si falta entrar con Google |
+| Tareas hechas | Al marcarla hecha sale de las listas (ventana del día, móvil, Plan) y del gráfico; sigue contando en el resumen del día y en Datos. Durante unos segundos sale un aviso con «Deshacer», y al final de cada día hay una sección «Hechas» plegada para desmarcarla |
+| Asignatura › Prioridades y tiempos | Cada grupo dice cuántas tareas lleva hechas y cuánto queda. Cada tarea tiene su casilla: se marca hecha hoy o se desmarca desde ahí |
 | Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
 | Tus días | Sin lista de días: solo el calendario. Un clic añade o quita el día, dejar el cursor encima (o mantener pulsado en el móvil) muestra su ficha (horas, franjas, plan por asignatura y fechas límite) y doble clic abre una ventana para editar sus franjas |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |

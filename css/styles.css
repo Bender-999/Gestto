@@ -710,3 +710,22 @@ body:has(.dv-bar) .runbar,body:has(.modal-bg) .runbar{display:none}
 .toast .btn.ghost{color:var(--bg);border-color:color-mix(in srgb,var(--bg) 45%,transparent);min-height:44px;border-radius:999px;padding:8px 18px}
 @media (prefers-reduced-motion:no-preference){.toast{animation:toastIn .3s cubic-bezier(.2,.8,.2,1)}}
 @keyframes toastIn{from{transform:translateY(-20px);opacity:0}}
+
+/* Tareas hechas: plegadas al final de cada día, solo para desmarcar una por error. */
+.dv-hechas{margin-top:10px}
+.dv-hbtn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:8px 14px;background:none;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);font:500 14px/1 var(--f-body);cursor:pointer;text-align:left}
+.dv-hbtn .num{font-size:12px;padding:3px 8px;border-radius:999px;background:var(--line);color:var(--ink)}
+.dv-hbtn i{margin-left:auto;font-style:normal;font-size:18px;transition:transform .15s}
+.dv-hbtn[aria-expanded=true] i{transform:rotate(90deg)}
+.dv-hbtn:hover{color:var(--ink);border-color:var(--muted)}
+.dv-done{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.dv-done .dv-t small{display:flex;align-items:center;gap:6px}
+.dv-empty{list-style:none;padding:12px 4px;color:var(--muted);font-size:14px}
+.dv-hechas.plan{margin:6px 0 4px}
+.dv-hechas.plan .row{margin-top:6px}
+
+/* Asignatura › Prioridades y tiempos: tareas hechas. */
+.okc{color:var(--accent);font-weight:600}
+.si .dv-chk{margin-left:-38px}
+.si.done .w>span{text-decoration:line-through;color:var(--muted)}
+.pr.grp.done .w b{color:var(--muted)}
