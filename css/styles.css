@@ -734,3 +734,21 @@ body:has(.dv-bar) .runbar,body:has(.modal-bg) .runbar{display:none}
 .dv-addbtn{margin-top:10px;width:100%;min-height:44px;border-style:dashed}
 .dv-add{margin-top:10px}
 .dv-add .addbox{margin:0}
+
+/* Cronómetro: se toca para verlo a pantalla completa. */
+button.big{background:none;border:0;padding:0 .1em;margin:0;color:inherit;cursor:zoom-in;border-radius:var(--r-l)}
+button.big:focus-visible{outline:3px solid currentColor;outline-offset:6px}
+.fs-timer{position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:var(--panel);color:var(--ink);cursor:zoom-out;user-select:none;-webkit-user-select:none;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
+.fs-timer[data-phase=do]{background:var(--accent);color:var(--bg)}
+.fs-timer[data-phase=review]{background:var(--exam);color:var(--bg)}
+.fs-timer[data-phase=break]{background:var(--low);color:var(--bg)}
+.fs-timer[data-phase=pause]{background:repeating-linear-gradient(135deg,var(--track) 0 28px,var(--panel) 28px 56px)}
+.fs-timer b{font:600 100px/.9 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.fs-timer.over b{color:var(--over)}
+.fs-timer[data-phase=do].over{background:var(--ink)}
+.fs-timer[data-phase=pause] b{opacity:.6}
+@media (prefers-reduced-motion:no-preference){.fs-timer:not([hidden]){animation:fsIn .25s ease-out}}
+@keyframes fsIn{from{opacity:0;transform:scale(.97)}}
+body.fs-on{overflow:hidden}
+body.fs-on .runbar{display:none}
+body.fs-on .toast-wrap{z-index:130}

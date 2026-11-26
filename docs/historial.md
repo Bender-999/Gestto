@@ -1,5 +1,10 @@
 # Historial
 
+## Versión 2.6 (26 de noviembre de 2026)
+
+- En la sesión ya no sale la fila de asignaturas.
+- Al tocar el cronómetro se ve solo el número a pantalla completa. Se sale tocando o con Esc.
+
 ## Versión 2.5 (26 de noviembre de 2026)
 
 - Las tareas hechas salen de las listas y del gráfico. Aviso con «Deshacer» y sección «Hechas» plegada al final de cada día.

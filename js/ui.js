@@ -30,6 +30,25 @@ const UIK = 'la-hoja-ui';
 const uiPref = (() => {try {return JSON.parse(localStorage.getItem(UIK) || '{}')} catch (e) {return {}}})();
 const saveUi = () => {try {localStorage.setItem(UIK, JSON.stringify(uiPref))} catch (e) {}};
 if (!uiPref.dev) {uiPref.dev = Math.random().toString(36).slice(2, 10); saveUi()} /* Identifica este dispositivo para los avisos. */
+/* Cronómetro a pantalla completa: solo el número. Se sale tocando o con Esc. */
+let fsOn = false;
+function fsEnter() {
+  fsOn = true; const f = $('fsT'); f.innerHTML = '<b></b>'; f.hidden = false; document.body.classList.add('fs-on'); tick();
+  const el = document.documentElement;
+  try {if (el.requestFullscreen) el.requestFullscreen({navigationUI: 'hide'}).catch(() => {}); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()} catch (e) {}
+}
+function fsExit() {
+  fsOn = false; const f = $('fsT'); f.hidden = true; f.innerHTML = ''; document.body.classList.remove('fs-on');
+  try {if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (document.webkitFullscreenElement) document.webkitExitFullscreen()} catch (e) {}
+}
+/* El número ocupa todo lo que cabe: se mide a 100 px y se escala al ancho y al alto. */
+function fsFit() {
+  const b = $('fsT').firstChild; if (!b) return;
+  b.style.fontSize = '100px'; const w = b.scrollWidth || 1;
+  b.style.fontSize = Math.floor(Math.min(100 * innerWidth * .92 / w, innerHeight * .7)) + 'px';
+}
+addEventListener('resize', () => {if (fsOn) fsFit()});
+document.addEventListener('fullscreenchange', () => {if (fsOn && !document.fullscreenElement) fsExit(); else if (fsOn) setTimeout(fsFit, 120)});
 let alertList = [], alertShown = new Set(), toastT = null, undoSnap = null;
 const hOpen = new Set(); /* Días con la sección «Hechas» abierta. */
 const LOADED = Date.now();
@@ -57,7 +76,7 @@ function render() {
   if (scope !== 'general' && scope !== 'nueva' && !S.subs[scope]) scope = 'general';
   const add = scope === 'nueva', foc = view === 'sesion' && !add;
   renderScopes();
-  $('headblock').hidden = foc; $('chart').hidden = foc || none || add; $('tabs').hidden = add || none;
+  $('headblock').hidden = foc; $('scopes').hidden = foc; $('chart').hidden = foc || none || add; $('tabs').hidden = add || none;
   ['config', 'plan', 'sesion', 'datos'].forEach(v => $('v-' + v).setAttribute('aria-selected', v === view));
   if (!foc) renderHead(al, ob);
   if (none && !add && !(view === 'config' && scope === 'general')) renderWelcome();
@@ -382,7 +401,7 @@ function renderSimpleSession(al) {
     <div class="sp-ses-top"><button type="button" class="btn ghost sm" data-sp="dia">‹ Día</button><span class="state"><i></i>${STATE[ph]}</span><button type="button" class="btn ghost sm" data-spmore="1" aria-expanded="${spMore}">Más</button></div>
     ${more}
     <div class="sp-ses-main"><div class="sp-ses-sub">${it ? sw(it.sid) + esc(it.subName) : ''}</div><h2>${it ? esc(it.name) : 'Has acabado lo previsto'}</h2>
-    <div class="big" id="bigT"></div><div class="bigsub" id="bigS"></div></div>
+    <button type="button" class="big" id="bigT" data-fs="1" aria-label="Ver el cronómetro a pantalla completa"></button><div class="bigsub" id="bigS"></div></div>
     <div class="sp-acts">${acts}</div>
     <div class="sp-today"><span>Hoy <b id="miStudy"></b></span><span>Descanso <b id="miBreak"></b></span></div>
     ${nxt ? `<p class="sub sp-next">Después: ${esc(nxt.subName)} · ${esc(nxt.name)}</p>` : ''}
@@ -672,7 +691,7 @@ function renderSession(al) {
   const changes = nxt && nxt.sid !== r.sid;
   v.innerHTML = stale + `<div class="focus" data-phase="${ph === 'free' ? '' : ph}"><div class="state"><i></i>${STATE[ph]}</div><div class="phase">${it ? esc(it.subName) : ''}${brk ? ' · parado en ' + PHASE[from].toLowerCase() : ''}${pa ? ' · parado en ' + PHASE[base === 'break' ? 'break' : base].toLowerCase() : ''}${it && it.extra ? ' · fuera del plan' : ''}${op ? ' · ' + fmt(it.m) + ' al día hasta que la acabes' : ''}</div>
     <h2>${it ? esc(it.name) : 'Has acabado lo previsto'}</h2>${it && it.det ? `<p>${esc(it.det)}</p>` : ''}${it ? '' : '<p>Si sigues estudiando, añade abajo lo que vas a hacer. Si no, pulsa Parar.</p>'}
-    <div class="big" id="bigT"></div><div class="bigsub" id="bigS"></div><div class="actions">${b}</div></div>
+    <button type="button" class="big" id="bigT" data-fs="1" aria-label="Ver el cronómetro a pantalla completa"></button><div class="bigsub" id="bigS"></div><div class="actions">${b}</div></div>
    <div class="minis"><div><small>Estudio hoy</small><b id="miStudy"></b></div><div><small>Descanso hoy</small><b id="miBreak"></b></div><div><small>Esta tarea</small><b id="miTask"></b></div><div><small>${changes ? 'Después cambias a' : 'Después'}</small><span class="nx">${nxt ? esc(nxt.subName) + ' · ' + esc(nxt.name) : 'Nada más pendiente'}</span></div></div>
    <div class="row-btns">${it ? `<button class="btn ghost" data-showextra="1">Tarea fuera del plan</button><button class="btn ghost" data-act="minus5">Quitar 5 min a este tramo</button>` : ''}</div>
    ${showExtra || !it ? extraForm() : ''}
@@ -687,6 +706,7 @@ function tick() {
     const t = base === 'do' ? (lib ? c.doM : c.left) : base === 'review' ? c.rev : c.cur;
     $('rbT').textContent = L.fmtClock(t); $('rbT').classList.toggle('over', base === 'do' && !lib && c.left < 0);
   }
+  if (fsOn && !r) fsExit();
   if (!r || !$('bigT')) return;
   const c = L.clock(S, now, TODAY); let big = 0, sub = '', over = false;
   const lib = c.it && c.it.libre, base = r.phase === 'pause' ? r.pb.phase : r.phase;
@@ -694,7 +714,9 @@ function tick() {
   else if (r.phase === 'do') {if (lib) {big = c.doM; sub = 'Cronómetro. Cuenta como estudio de ' + c.it.subName} else {big = c.left; over = c.left < 0; sub = over ? '<span class="pill">Tiempo superado</span>' : 'Queda de ' + fmt(c.it ? c.it.m : 0)}}
   else if (r.phase === 'review') {big = c.cur; sub = 'Revisión sin límite. Cuenta como estudio'}
   else if (r.phase === 'break') {big = c.cur; sub = 'Estudio y tarea parados'}
-  $('bigT').textContent = L.fmtClock(big); $('bigS').innerHTML = sub.startsWith('<') ? sub : esc(sub);
+  $('bigT').textContent = L.fmtClock(big);
+  if (fsOn) {const f = $('fsT'), t = L.fmtClock(big), n = f.firstChild.textContent.length; f.firstChild.textContent = t; f.classList.toggle('over', over); f.dataset.phase = r.phase; if (t.length !== n) fsFit()}
+  $('bigS').innerHTML = sub.startsWith('<') ? sub : esc(sub);
   const day = S.app.days.find(x => x.d === r.day);
   const put = (id, t) => {const el = $(id); if (el) el.textContent = t};
   put('miStudy', L.fmtClock(c.sDay) + (day ? ' de ' + fmt(day.h * 60) : '')); put('miBreak', L.fmtClock(c.bDay)); put('miTask', L.fmtClock(c.doM) + ' + ' + L.fmtClock(c.rev) + ' rev.');
@@ -829,6 +851,7 @@ document.addEventListener('keydown', e => {
   if (e.target.id === 'slotEditTxt') {
     if (e.key === 'Enter') {e.preventDefault(); applySlotEdit()}
     else if (e.key === 'Escape') {e.preventDefault(); slotEdit = null; render()}
+  } else if (e.key === 'Escape' && fsOn) {fsExit()
   } else if (e.key === 'Escape' && (pick || menuOpen || slotEdit)) {pick = null; menuOpen = null; slotEdit = null; render()}
   else if (e.key === 'Escape' && dayPop) {dayPop = null; render()}
   else if (e.key === 'Escape' && dayView) {if (doneAsk || moveAsk || selAsk) {doneAsk = moveAsk = selAsk = null} else if (selMode) exitSel(); else dayView = null; render()}
@@ -850,6 +873,7 @@ document.addEventListener('click', e => {
   if (selMode && dayView) {const row = e.target.closest('.dv-r[data-key]'); if (row && !row.classList.contains('done') && !e.target.closest('button,[data-dvdrag]')) {const k = row.dataset.key; if (sel.has(k)) sel.delete(k); else sel.add(k); render(); return}}
   if (dayPop && e.target.dataset && e.target.dataset.modalbg) {dayPop = null; slotEdit = null; render(); return}
   if (slotEdit && !e.target.closest('.slot-pop') && !e.target.closest('.slot')) {slotEdit = null; render(); return}
+  if (fsOn && e.target.closest('#fsT')) {fsExit(); return}
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.set !== undefined) {applySet(d.set, d.id, d.val, b); return}
   if (d.dp !== undefined) {pick = pick === d.dp ? null : d.dp; pickMonth = null; render(); return}
@@ -865,6 +889,7 @@ document.addEventListener('click', e => {
   if (d.spmore) {spMore = !spMore; render(); return}
   if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
   if (d.undo) {undoDone(); return}
+  if (d.fs) {fsEnter(); return}
   if (d.dvopen) {const it = L.findItem(S, d.key, TODAY); if (it) markWithUndo([[it, dayView && dayView <= TODAY ? dayView : TODAY, d.dvopen === 'fin']]); doneAsk = null; commit(); return}
   if (d.sdone) {
     const [ssid, tid] = d.sdone.split('/'), ss = S.subs[ssid], tt = ss && ss.grupos.flatMap(g => g.tareas || []).find(x => x.id === tid);
