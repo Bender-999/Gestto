@@ -1,5 +1,10 @@
 # Historial
 
+## Versión 2.8 (26 de noviembre de 2026)
+
+- Mis datos con gráficas al estilo de Tiempo de uso: la semana arriba, el día por horas abajo y la leyenda por asignatura. Las cifras pasan debajo.
+- `hourly` en la lógica: minutos por hora de un día, con prueba.
+
 ## Versión 2.7 (26 de noviembre de 2026)
 
 - Mis datos: Día, Semana o Todo, con flechas para cambiar. Toda la página sigue al periodo. Ya no salen los días que no han llegado (en la semana, solo su previsto).

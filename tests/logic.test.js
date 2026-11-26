@@ -248,3 +248,12 @@ test('stats por periodo: solo cuenta lo de esos días', () => {
   assert.equal(wk.study, 90); assert.equal(wk.days.length, 2);
   assert.equal(L.stats(S, d2, t2 + 50 * min).study, 90);
 });
+
+test('hourly: reparte los tramos por horas', () => {
+  const S = L.newState(), d = '2026-11-26', h = (H, M) => new Date(2026, 10, 26, H, M).getTime();
+  S.log['2026-11'] = [{a: 'a', d, k: 'a/x', s: h(15, 30), e: h(16, 45), t: 'd'}, {a: 'a', d, k: '', s: h(16, 45), e: h(16, 55), t: 'b'}, {a: 'b', d, k: 'b/y', s: h(16, 55), e: h(17, 10), t: 'r'}, {a: 'a', d, k: '', s: h(17, 10), e: h(17, 20), t: 'p'}];
+  const H = L.hourly(S, d, h(18, 0));
+  assert.equal(H[15].bySub.a, 30); assert.equal(H[16].bySub.a, 45); assert.equal(H[16].brk, 10);
+  assert.equal(H[16].bySub.b, 5); assert.equal(H[17].bySub.b, 10); assert.equal(H[17].tot, 10);
+  assert.equal(L.hourly(S, d, h(18, 0), 'b')[16].bySub.a, undefined);
+});

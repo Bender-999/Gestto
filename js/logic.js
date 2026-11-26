@@ -600,10 +600,27 @@ function stats(S,today,now,scope,rng){
   return {days,dom,rev,brk,paus,extraMin,extraN,study:dom+rev,planned:sum(counted,o=>o.plan),stints,breaks,rows:Object.values(rows),over,nt,estT,domT,bySub,tasksBy,tasks:sum(days,o=>o.tasks),
     meanStint:stints.length?sum(stints,x=>x)/stints.length:0,maxStint:stints.length?Math.max(...stints):0,meanBreak:breaks.length?sum(breaks,x=>x)/breaks.length:0};
 }
+/* Minutos por hora de un día (hora local), por asignatura y de descanso, para la gráfica diaria.
+   Incluye el tramo abierto de la sesión. Las pausas no cuentan. */
+function hourly(S,d,now,scope){
+  const c={log:{},app:{run:S.app.run&&{...S.app.run}}};
+  for(const k of Object.keys(S.log))c.log[k]=[...S.log[k]];
+  if(c.app.run)closeSeg(c,now);
+  const H=Array.from({length:24},()=>({bySub:{},brk:0,tot:0}));
+  for(const x of allSegs(c)){
+    if(x.d!==d||x.t==='p'||(scope&&x.a!==scope))continue;
+    for(let t=x.s;t<x.e;){
+      const dt=new Date(t),h=dt.getHours(),nb=new Date(dt.getFullYear(),dt.getMonth(),dt.getDate(),h+1).getTime(),e=Math.min(x.e,nb),m=(e-t)/60000;
+      if(x.t==='b')H[h].brk+=m;else{H[h].bySub[x.a]=(H[h].bySub[x.a]||0)+m;H[h].tot+=m}
+      t=e;
+    }
+  }
+  return H;
+}
 function fmt(m){m=Math.round(Math.abs(m));const h=Math.floor(m/60),n=m%60;return h&&n?h+' h '+String(n).padStart(2,'0'):h?h+' h':n+' min'}
 function dec(x,d){return x.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d})}
 function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {closeOpen,finishOpen,startOpen,alerts,BRK_EVERY,BRK_LEN,dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {hourly,closeOpen,finishOpen,startOpen,alerts,BRK_EVERY,BRK_LEN,dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
