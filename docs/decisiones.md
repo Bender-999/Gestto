@@ -43,6 +43,8 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Cuenta | En Configuración › General › Cuenta: con quién está sincronizado y el botón Salir. Arriba de la página solo sale un aviso si falta entrar con Google |
 | Tareas hechas | Al marcarla hecha sale de las listas (ventana del día, móvil, Plan) y del gráfico; sigue contando en el resumen del día y en Datos. Durante unos segundos sale un aviso con «Deshacer», y al final de cada día hay una sección «Hechas» plegada para desmarcarla |
 | Asignatura › Prioridades y tiempos | Cada grupo dice cuántas tareas lleva hechas y cuánto queda. Cada tarea tiene su casilla: se marca hecha hoy o se desmarca desde ahí |
+| Tareas de cada día | Una tarea puede no tener tiempo total: lleva un rato al día y sale cada día de estudio hasta que la marques acabada (o llegue su fecha límite). En la sesión: «Por hoy» (cuenta el rato y sigue mañana) y «Acabada». En la ventana del día: «Hecha por hoy» o «Acabada del todo». Desmarcarla la reabre |
+| Dónde se crean | Plan › Añadir tarea («Una vez» o «Cada día hasta acabarla»), la ventana del día o la lista del móvil (una de una vez queda fija en ese día; una de cada día empieza ese día), la sesión («Tarea fuera del plan»: «Solo ahora» o «Varios días») y el texto de la IA (`minutos_por_dia`) |
 | Nombre | La app se llama **La Hoja**. El repositorio es Gestto |
 | Tus días | Sin lista de días: solo el calendario. Un clic añade o quita el día, dejar el cursor encima (o mantener pulsado en el móvil) muestra su ficha (horas, franjas, plan por asignatura y fechas límite) y doble clic abre una ventana para editar sus franjas |
 | Día con franjas | El nombre del día se rellena en oscuro. Si se quitan todas las franjas, el día pasa a «Libre» |

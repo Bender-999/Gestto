@@ -177,3 +177,39 @@ test('alerts: descanso a los 50 min seguidos, fin de tarea y fin del descanso', 
   assert.equal(L.alerts(S)[0].at, t0 + 125 * min);
   assert.deepEqual(L.alerts({app: {run: null}, subs: {}, log: {}}), []);
 });
+
+test('tarea abierta: un rato cada día hasta acabarla', () => {
+  const S = L.newState();
+  L.parseText(JSON.stringify(SAMPLE)).subs.forEach(s => L.applySub(S, s));
+  const sid = S.app.order[0], d1 = '2026-11-16', d2 = '2026-11-17', d3 = '2026-11-18', t0 = Date.UTC(2026, 10, 16, 15), min = 60000;
+  S.app.days = [{d: d1, h: 4}, {d: d2, h: 4}, {d: d3, h: 4}];
+  const k = L.addManual(S, sid, {nombre: 'Leer el libro', minDia: 30, desde: d1}, t0);
+  let its = L.buildItems(S, d1).filter(i => i.taskKey === k);
+  assert.deepEqual(its.map(i => i.key), [k + '@' + d1, k + '@' + d2, k + '@' + d3]);
+  assert.ok(its.every(i => i.open && i.m === 30));
+  const al = L.allocate(S, d1);
+  assert.ok(al.plan[d1].some(r => r.it.key === k + '@' + d1), 'entra el primer día');
+  assert.ok(al.plan[d2].some(r => r.it.key === k + '@' + d2), 'y el segundo');
+  // Sesión: «Por hoy» marca solo el día; sigue al día siguiente.
+  S.app.run = {day: d1, phase: 'do', key: k + '@' + d1, sid, since: t0, back: null};
+  L.nextStep(S, t0 + 40 * min);
+  assert.equal(S.subs[sid].done[k + '@' + d1], d1);
+  assert.ok(!S.subs[sid].done[k]);
+  assert.equal(L.buildItems(S, d2).filter(i => i.taskKey === k && !i.done).length, 2);
+  // «Acabada» la cierra: no sale más días.
+  S.app.run = {day: d2, phase: 'do', key: k + '@' + d2, sid, since: t0 + 24 * 60 * min, back: null};
+  L.finishOpen(S, t0 + 24 * 60 * min + 20 * min);
+  assert.equal(S.subs[sid].done[k], d2);
+  assert.equal(L.buildItems(S, d2).filter(i => i.taskKey === k).length, 0);
+  // Desmarcarla la reabre.
+  L.unmarkDone(S, {sid, key: k + '@' + d2, taskKey: k, open: true});
+  assert.ok(!S.subs[sid].done[k]);
+  // Desde el texto de la IA.
+  const r = L.parseText(JSON.stringify({formato: 'hoja-carga/1', asignatura: {nombre: 'TFG', grupos: [{id: 'g', nombre: 'Memoria', tareas: [{id: 'escribir', nombre: 'Escribir', minutos_por_dia: 45, desde: '2026-11-20'}]}]}}));
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  const T = r.subs[0].grupos[0].tareas[0];
+  assert.equal(T.minDia, 45); assert.equal(T.desde, '2026-11-20');
+  const back = L.exportSub(Object.assign(L.emptyProgress(), r.subs[0]));
+  assert.equal(back.asignatura.grupos[0].tareas[0].minutos_por_dia, 45);
+  assert.ok(!L.parseText(JSON.stringify({formato: 'hoja-carga/1', asignatura: {nombre: 'X', grupos: [{nombre: 'G', tareas: [{nombre: 'Sin tiempo'}]}]}})).ok);
+});

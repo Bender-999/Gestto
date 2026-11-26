@@ -729,3 +729,8 @@ body:has(.dv-bar) .runbar,body:has(.modal-bg) .runbar{display:none}
 .si .dv-chk{margin-left:-38px}
 .si.done .w>span{text-decoration:line-through;color:var(--muted)}
 .pr.grp.done .w b{color:var(--muted)}
+
+/* Añadir tarea desde la ventana del día y la versión móvil. */
+.dv-addbtn{margin-top:10px;width:100%;min-height:44px;border-style:dashed}
+.dv-add{margin-top:10px}
+.dv-add .addbox{margin:0}

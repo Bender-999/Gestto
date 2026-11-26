@@ -128,8 +128,10 @@ function normalize(o){
       (g.tareas||[]).forEach((t,ti)=>{
         const tn=t.nombre||('Tarea '+(ti+1)),tid=slug(t.id||(gid+'-'+tn));
         if(tids.has(tid))e.push(`Identificador de tarea repetido: «${tid}».`);tids.add(tid);
-        const min=+t.minutos;if(!(min>0))e.push(`Tarea «${tn}» de «${gn}»: «minutos» debe ser un número mayor que 0.`);
+        const pd=+t.minutos_por_dia||0,min=pd>0?0:+t.minutos;
+        if(!(pd>0)&&!(min>0))e.push(`Tarea «${tn}» de «${gn}»: pon «minutos» (una vez) o «minutos_por_dia» (cada día hasta acabarla), mayor que 0.`);
         const T={id:tid,nombre:String(tn),det:String(t.detalle||''),min:min||0,limite:dt(t.fecha_limite,`Tarea «${tn}»`),limiteId:t.limite_id?slug(t.limite_id):'',dep:(Array.isArray(t.depende_de)?t.depende_de:[]).map(slug)};
+        if(pd>0){T.minDia=pd;const de=dt(t.desde,`Tarea «${tn}»`);if(de)T.desde=de}
         if(t.prioridad!==undefined)T.prio=lv(t.prioridad,G.prio);
         if(t.revision===true||t.revision===false)T.rev=t.revision;
         if(t.dep_ok)T.dep_ok=true;
@@ -158,6 +160,7 @@ function addManual(S,sid,o,now){
   if(!g){g={id:'manuales',nombre:'Añadidas a mano',tipo:'bloque',prio:s.prio,freq:'',sim:false,limite:'',tareas:[],manual:true};s.grupos.push(g)}
   const id='m-'+now.toString(36),t={id,nombre:String(o.nombre||'Tarea').trim(),det:o.det||'',min:+o.min||0,limite:'',dep:[],prio:o.prio??s.prio,manual:true};
   if(o.extra){t.extra=true;t.rev=false}
+  if(+o.minDia>0){t.min=0;t.minDia=+o.minDia;t.rev=false;if(isDate(o.desde))t.desde=o.desde}
   g.tareas.push(t);return sid+'/'+id;
 }
 function removeManual(S,key){
@@ -165,7 +168,7 @@ function removeManual(S,key){
   g.tareas=g.tareas.filter(t=>t.id!==id);delete s.done[key];delete s.real[key];delete s.mins[key];delete s.lvl[key];
   if(!g.tareas.length)s.grupos=s.grupos.filter(x=>x!==g);
 }
-function taskIndex(s){const m=new Map();s.grupos.filter(g=>!g.manual).forEach(g=>{if(g.tipo==='recurrente')m.set(g.id,{nombre:g.nombre,min:g.minSem,g:g.nombre});else if(g.tipo==='diaria')m.set(g.id,{nombre:g.nombre,min:g.minDia,g:g.nombre});else(g.tareas||[]).forEach(t=>m.set(t.id,{nombre:t.nombre,min:t.min,g:g.nombre}))});return m}
+function taskIndex(s){const m=new Map();s.grupos.filter(g=>!g.manual).forEach(g=>{if(g.tipo==='recurrente')m.set(g.id,{nombre:g.nombre,min:g.minSem,g:g.nombre});else if(g.tipo==='diaria')m.set(g.id,{nombre:g.nombre,min:g.minDia,g:g.nombre});else(g.tareas||[]).forEach(t=>m.set(t.id,{nombre:t.nombre,min:t.min||t.minDia,g:g.nombre}))});return m}
 function diffSub(old,nw){
   const a=old?taskIndex(old):new Map(),b=taskIndex(nw),added=[],removed=[],changed=[];
   for(const [k,v] of b){const o=a.get(k);if(!o)added.push(v.nombre);else if(o.min!==v.min)changed.push(`${v.nombre}: ${o.min} → ${v.min} min`)}
@@ -183,7 +186,7 @@ function applySub(S,nw){
 function exportSub(s){
   const lv=l=>({1:'alta',2:'media',3:'baja',0:'fuera'})[l];
   const lims=s.limites&&s.limites.length>1?{fechas_limite:s.limites.map(l=>({id:l.id,nombre:l.nombre,fecha:l.fecha,...(l.empezarAntes?{empezar_antes:l.empezarAntes}:{})}))}:{fecha_limite:s.limite||null,...(s.limites&&s.limites[0]&&s.limites[0].empezarAntes?{empezar_antes:s.limites[0].empezarAntes}:{})};
-  return {formato:FORMATO,asignatura:{id:s.id,nombre:s.nombre,tipo:s.tipo,prioridad:lv(s.prio),...lims,revision:s.revDef,revision_reservada_pct:s.revPct||0,notas:s.notas||undefined,minimo_horas_dia:s.minDia||undefined,grupos:s.grupos.filter(g=>!g.manual).map(g=>{const gb={id:g.id,nombre:g.nombre,tipo:g.tipo,prioridad:lv(g.prio),...(g.limiteId?{limite_id:g.limiteId}:{})};if(g.tipo==='recurrente')return{...gb,minutos_por_semana:g.minSem,minutos_por_bloque:g.bloque,detalle:g.det||undefined};if(g.tipo==='diaria')return{...gb,minutos_por_dia:g.minDia,detalle:g.det||undefined};return{...gb,frecuencia:g.freq||undefined,simulacro:g.sim||undefined,fecha_limite:g.limite||undefined,tareas:(g.tareas||[]).map(t=>({id:t.id,nombre:t.nombre,detalle:t.det||undefined,minutos:+s.mins[s.id+'/'+t.id]||t.min,prioridad:t.prio===undefined?undefined:lv(t.prio),fecha_limite:t.limite||undefined,...(t.limiteId?{limite_id:t.limiteId}:{}),depende_de:t.dep.length?t.dep:undefined,revision:t.rev}))}})}};
+  return {formato:FORMATO,asignatura:{id:s.id,nombre:s.nombre,tipo:s.tipo,prioridad:lv(s.prio),...lims,revision:s.revDef,revision_reservada_pct:s.revPct||0,notas:s.notas||undefined,minimo_horas_dia:s.minDia||undefined,grupos:s.grupos.filter(g=>!g.manual).map(g=>{const gb={id:g.id,nombre:g.nombre,tipo:g.tipo,prioridad:lv(g.prio),...(g.limiteId?{limite_id:g.limiteId}:{})};if(g.tipo==='recurrente')return{...gb,minutos_por_semana:g.minSem,minutos_por_bloque:g.bloque,detalle:g.det||undefined};if(g.tipo==='diaria')return{...gb,minutos_por_dia:g.minDia,detalle:g.det||undefined};return{...gb,frecuencia:g.freq||undefined,simulacro:g.sim||undefined,fecha_limite:g.limite||undefined,tareas:(g.tareas||[]).map(t=>({id:t.id,nombre:t.nombre,detalle:t.det||undefined,...(t.minDia?{minutos_por_dia:+s.mins[s.id+'/'+t.id]||t.minDia,desde:t.desde||undefined}:{minutos:+s.mins[s.id+'/'+t.id]||t.min}),prioridad:t.prio===undefined?undefined:lv(t.prio),fecha_limite:t.limite||undefined,...(t.limiteId?{limite_id:t.limiteId}:{}),depende_de:t.dep.length?t.dep:undefined,revision:t.rev}))}})}};
 }
 
 /* Tareas */
@@ -227,9 +230,21 @@ function buildItems(S,today){
         out.push({...base,key:gk,ti:0,unit:true,children:list.map(t=>sid+'/'+t.id),name:g.nombre+' · simulacro',det:list.length+' partes con un solo temporizador',m,base:m,lvl:s.lvl[gk]??g.prio,limit:lim,notBefore:'',deps:[],rev:s.revDef,done:pend.length?'':(s.done[sid+'/'+g.tareas[0].id]||'x')});
       }else(g.tareas||[]).forEach((t,ti)=>{
         const key=sid+'/'+t.id;
+        /* Tarea abierta: un rato cada día de estudio hasta que se marque acabada (s.done[key]).
+           Cada día es su propia tarea, con clave key@AAAA-MM-DD; «Por hoy» marca solo esa. */
+        if(t.minDia>0){
+          if(s.done[key])return;
+          const tLim=minDate(t.limite,getLimitDate(s,t.limiteId||g.limiteId)),from=t.desde||'';
+          for(const {d} of S.app.days){
+            if(d<today||(from&&d<from)||(tLim&&d>=tLim))continue;
+            const k=key+'@'+d,m=+s.mins[key]||t.minDia;
+            out.push({...base,key:k,taskKey:key,open:true,ti,name:g.manual?t.nombre:g.nombre+' · '+t.nombre,det:t.det,m,base:t.minDia,lvl:s.lvl[key]??t.prio??g.prio,limit:addDays(d,1),notBefore:d,deps:[],rev:false,done:s.done[k]||'',manual:!!t.manual});
+          }
+          return;
+        }
         const tLim=minDate(t.limite,getLimitDate(s,t.limiteId||g.limiteId));
         const notBef=getNotBefore(s,t.limiteId||g.limiteId);
-        out.push({...base,key,ti,name:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:tLim,notBefore:notBef,deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
+        out.push({...base,key,ti,name:g.manual?t.nombre:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:tLim,notBefore:notBef,deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
       });
     });
   }
@@ -454,7 +469,18 @@ function markDone(S,it,day,mins){
 function pinTask(S,key,d){const s=S.subs[key.split('/')[0]];if(!s)return;s.pin=s.pin||{};if(d)s.pin[key]=d;else delete s.pin[key]}
 /* Guarda el orden de las tareas de un día tal como lo deja el usuario. */
 function setDayOrder(S,d,keys){S.app.dord=S.app.dord||{};if(keys&&keys.length)S.app.dord[d]=[...keys];else delete S.app.dord[d]}
-function unmarkDone(S,it){const s=S.subs[it.sid];(it.unit?it.children:[it.key]).forEach(k=>{delete s.done[k]});delete s.real[it.key]}
+function unmarkDone(S,it){const s=S.subs[it.sid];(it.unit?it.children:[it.key]).forEach(k=>{delete s.done[k]});delete s.real[it.key];if(it.open)delete s.done[it.taskKey]}
+/* Tarea abierta acabada del todo: cuenta lo de hoy y ya no sale más días. */
+function closeOpen(S,it,day,mins){markDone(S,it,day,mins);S.subs[it.sid].done[it.taskKey]=day}
+function finishOpen(S,now){
+  const r=S.app.run;if(!r)return;
+  if(r.phase==='break'){closeSeg(S,now);r.phase=r.back;r.back=null;r.since=now}
+  const it=findItem(S,r.key,r.day);if(!it||!it.open)return nextStep(S,now);
+  closeSeg(S,now);closeOpen(S,it,r.day,freeLog(S,r));
+  const n=nextKey(S,r.day,r.sid);r.key=n?n.key:'';r.sid=n?n.sid:'';r.phase=n?'do':'free';r.back=null;r.since=now;
+}
+/* Desde la sesión: nueva tarea abierta y empezar ya con ella. */
+function startOpen(S,sid,nombre,minDia,now){const r=S.app.run;if(!r)return;const k=addManual(S,sid,{nombre,minDia,desde:r.day},now);switchTask(S,k+'@'+r.day,now)}
 function finishTask(S,now){
   const r=S.app.run,it=findItem(S,r.key,r.day);
   if(it){const total=freeLog(S,r);markDone(S,it,r.day,total)}
@@ -576,4 +602,4 @@ function nh(x){return x%1?dec(x,2).replace(/0$/,''):String(x)}
 function hh(x){return nh(x)+' h'}
 
 
-export {alerts,BRK_EVERY,BRK_LEN,dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};
+export {closeOpen,finishOpen,startOpen,alerts,BRK_EVERY,BRK_LEN,dayStats,pinTask,setDayOrder,DAY_START,DAY_END,FAR,FORMATO,LVIN,LV,MIN_CHUNK,addDays,addManual,allSegs,allocate,applySub,brkK,buildItems,carryOver,changes,cleanSlots,clock,clockAt,closeLibre,closeSeg,cmpItems,dayBlocks,dec,diffSub,discardRun,emptyProgress,emptySub,endDay,exportSub,findItem,finishTask,fmt,fmtClock,freeLog,getLimitDate,getNotBefore,goBreak,goPause,hh,isDate,ladder,makeDay,markDone,migrateApp,minDate,monday,newState,nextKey,nextStep,nh,normalize,objectives,okWith,pace,parseText,proposeNew,proposeStretch,pushSeg,removeManual,resumeWork,schedSlots,slotsHours,slug,startDay,startExtra,stats,studyHours,subState,switchTask,targetRow,taskCount,taskIndex,toClock,toMin,toTime,trimRun,unmarkDone,unpause,weekIdx,weeksOf,withHours};

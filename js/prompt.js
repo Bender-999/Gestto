@@ -40,6 +40,13 @@ export const PROMPT=`Actúa como planificador de estudio. Con los materiales que
             "limite_id": "parcial1",
             "depende_de": ["id de otra tarea"],
             "revision": true
+          },
+          {
+            "id": "t1-lectura",
+            "nombre": "Leer el capítulo 3",
+            "detalle": "Sin tiempo total: un rato cada día hasta acabarla",
+            "minutos_por_dia": 30,
+            "desde": "opcional, AAAA-MM-DD"
           }
         ]
       },
@@ -68,6 +75,8 @@ Reglas:
 - fecha_limite y fechas_limite[].fecha es el día del examen o la entrega; el trabajo tiene que acabar antes.
 - empezar_antes indica cuántos días antes de la fecha límite empieza a planificarse esa materia o grupo. 0 = desde ya.
 - limite_id apunta al id de una de las fechas_limite. Si lo omites, se usa la primera fecha límite de la asignatura.
+- Cada tarea lleva minutos (se hace una vez) o minutos_por_dia (tarea abierta), nunca los dos.
+- minutos_por_dia es para tareas sin tiempo total claro: salen cada día de estudio con ese rato hasta que se marquen acabadas o llegue su fecha límite. desde, opcional, es el primer día. No llevan depende_de ni revision.
 - minutos es el tiempo de hacer la tarea una vez, a mano y con la teoría ya vista. No incluye revisar. Sé realista y usa múltiplos de 5.
 - Cada id usa minúsculas, números y guiones. No se repite y no cambia entre versiones: si actualizas una asignatura, conserva los id de las tareas que sigan.
 - depende_de solo apunta a tareas de esta misma asignatura y nunca forma un círculo. Quita el campo si no hay dependencias.

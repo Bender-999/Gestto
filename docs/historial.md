@@ -3,6 +3,9 @@
 ## Versión 2.5 (26 de noviembre de 2026)
 
 - Las tareas hechas salen de las listas y del gráfico. Aviso con «Deshacer» y sección «Hechas» plegada al final de cada día.
+- Tareas de cada día: un rato al día hasta marcarlas acabadas. Se crean desde Plan, la ventana del día, la sesión y el texto de la IA (`minutos_por_dia`, `desde`). En la sesión, «Por hoy» y «Acabada».
+- «Añadir tarea a este día» en la ventana del día y en el móvil.
+- `docs/formato-ia.md` lista todas las propiedades de asignaturas, grupos y tareas.
 - Corregido: en la asignatura, «Prioridades y tiempos» no enseñaba las tareas hechas. Ahora cada grupo dice cuántas lleva y cada tarea tiene su casilla.
 
 ## Origen (noviembre de 2026)
