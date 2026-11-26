@@ -1,5 +1,11 @@
 # Historial
 
+## Versión 2.7 (26 de noviembre de 2026)
+
+- Mis datos: Día, Semana o Todo, con flechas para cambiar. Toda la página sigue al periodo. Ya no salen los días que no han llegado (en la semana, solo su previsto).
+- Detalle al pasar el cursor por la gráfica: asignatura, horas dedicadas y tareas hechas.
+- `stats` acepta un periodo y cuenta tareas por asignatura (`tasksBy`).
+
 ## Versión 2.6 (26 de noviembre de 2026)
 
 - En la sesión ya no sale la fila de asignaturas.

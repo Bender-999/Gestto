@@ -716,25 +716,79 @@ function tick() {
 }
 
 /* ---------- Datos ---------- */
+/* Mis datos: por día (hoy por defecto), por semana (lunes a domingo) o todo. Toda la página
+   se calcula para el periodo elegido. No se avanza más allá del periodo actual. */
+let dPer = 'dia', dRef = null;
+const PERIODS = [{v: 'dia', label: 'Día'}, {v: 'semana', label: 'Semana'}, {v: 'todo', label: 'Todo'}];
+function dRange() {
+  const ref = dRef || TODAY;
+  if (dPer === 'dia') return {from: ref, to: ref};
+  if (dPer === 'semana') {const f = L.monday(ref); return {from: f, to: L.addDays(f, 6)}}
+  return null;
+}
 function renderData() {
-  const sc = scope === 'general' ? null : scope, o = L.stats(S, TODAY, Date.now(), sc), v = $('main');
-  if (!o.study && !o.brk) {v.innerHTML = '<section><h2>Mis datos</h2><div class="empty">Aún no hay datos. Pulsa Empezar día y aquí irán apareciendo tus horas reales, los descansos y lo que tardas frente a lo estimado.</div></section>'; return}
+  const sc = scope === 'general' ? null : scope, v = $('main'), rng = dRange(), o = L.stats(S, TODAY, Date.now(), sc, rng);
+  const all = rng ? L.stats(S, TODAY, Date.now(), sc) : o;
+  if (!all.study && !all.brk) {v.innerHTML = '<section><h2>Mis datos</h2><div class="empty">Aún no hay datos. Pulsa Empezar día y aquí irán apareciendo tus horas reales, los descansos y lo que tardas frente a lo estimado.</div></section>'; return}
+  const cur = !rng || rng.to >= TODAY;
+  const lbl = !rng ? 'Desde el principio' : dPer === 'dia' ? (rng.from === TODAY ? 'Hoy, ' : '') + dayLabel(rng.from) : (cur ? 'Esta semana, ' : 'Semana del ') + dayLabel(rng.from) + ' al ' + dayLabel(rng.to);
+  const nav = `<div class="dper">${seg({key: 'dPer', value: dPer, options: PERIODS, label: 'Periodo'})}
+    ${rng ? `<div class="dnav"><button type="button" class="btn ghost sm" data-dnav="-1" aria-label="${dPer === 'dia' ? 'Día anterior' : 'Semana anterior'}">‹</button><b>${lbl}</b><button type="button" class="btn ghost sm" data-dnav="1" aria-label="${dPer === 'dia' ? 'Día siguiente' : 'Semana siguiente'}"${cur ? ' disabled' : ''}>›</button>${cur ? '' : '<button type="button" class="btn ghost sm" data-dnav="0">Hoy</button>'}</div>` : `<div class="dnav"><b>${lbl}</b></div>`}</div>`;
+  const per = dPer === 'dia' ? 'este día' : dPer === 'semana' ? 'esta semana' : '';
   const dev = o.estT ? o.domT / o.estT - 1 : 0, hrs = o.study / 60;
-  const t = [[fmt(o.study), 'de estudio real'], ...(sc ? [] : [[fmt(o.planned), 'previstas hasta hoy'], [(o.planned ? Math.round(100 * o.study / o.planned) : 0) + ' %', 'de lo previsto cumplido']]), [fmt(o.brk), 'en descanso'], [fmt(o.meanStint), 'de media sin descanso'], [fmt(o.maxStint), 'tu bloque más largo'], [o.breaks.length ? fmt(o.meanBreak) : '—', 'de media por descanso'], [(o.study ? Math.round(100 * o.study / (o.study + o.brk)) : 0) + ' %', 'del tiempo sentado es estudio'], [fmt(o.rev), 'revisando, ' + (o.dom ? Math.round(100 * o.rev / o.dom) : 0) + ' % sobre lo hecho'], [fmt(o.paus), 'en pausa, no cuenta'], [fmt(o.extraMin), (o.extraN === 1 ? '1 tarea' : o.extraN + ' tareas') + ' fuera del plan'], [String(o.nt), 'tareas acabadas con temporizador'], [hrs ? dec(o.nt / hrs, 1) : '0', 'tareas por hora'], [o.nt ? (dev >= 0 ? '+' : '−') + Math.abs(Math.round(dev * 100)) + ' %' : '—', o.nt ? 'tardas frente a lo estimado, sin revisar' : 'desviación, sin tareas acabadas']].map(([a, b]) => `<div><b>${a}</b><small>${b}</small></div>`).join('');
-  const days = sc ? o.days.filter(d => d.logged) : o.days, max = Math.max(1, ...days.map(d => Math.max(d.plan, d.dom + d.rev + d.brk))), pc = m => (100 * m / max * .76) + '%';
+  const t = [[fmt(o.study), 'de estudio real'], ...(sc ? [] : [[fmt(o.planned), rng ? 'previstas' + (cur ? ' hasta hoy' : '') : 'previstas hasta hoy'], [(o.planned ? Math.round(100 * o.study / o.planned) : 0) + ' %', 'de lo previsto cumplido']]), [fmt(o.brk), 'en descanso'], [String(o.tasks), o.tasks === 1 ? 'tarea acabada' : 'tareas acabadas'], [fmt(o.meanStint), 'de media sin descanso'], [fmt(o.maxStint), 'tu bloque más largo'], [o.breaks.length ? fmt(o.meanBreak) : '—', 'de media por descanso'], [(o.study ? Math.round(100 * o.study / (o.study + o.brk)) : 0) + ' %', 'del tiempo sentado es estudio'], [fmt(o.rev), 'revisando, ' + (o.dom ? Math.round(100 * o.rev / o.dom) : 0) + ' % sobre lo hecho'], [fmt(o.paus), 'en pausa, no cuenta'], [fmt(o.extraMin), (o.extraN === 1 ? '1 tarea' : o.extraN + ' tareas') + ' fuera del plan'], [String(o.nt), 'tareas acabadas con temporizador'], [hrs ? dec(o.nt / hrs, 1) : '0', 'tareas por hora'], [o.nt ? (dev >= 0 ? '+' : '−') + Math.abs(Math.round(dev * 100)) + ' %' : '—', o.nt ? 'tardas frente a lo estimado, sin revisar' : 'desviación, sin tareas acabadas']].map(([a, b]) => `<div><b>${a}</b><small>${b}</small></div>`).join('');
+  /* Filas de la gráfica: el día elegido, los 7 días de la semana o todos los días hasta hoy. */
+  const blank = d => ({d, plan: 0, dom: 0, rev: 0, brk: 0, tasks: 0, logged: false, bySub: {}, tasksBy: {}});
+  const byD = Object.fromEntries(o.days.map(x => [x.d, x]));
+  let days;
+  if (dPer === 'dia') days = [byD[rng.from] || blank(rng.from)];
+  else if (dPer === 'semana') days = Array.from({length: 7}, (_, i) => {const d = L.addDays(rng.from, i); return byD[d] || blank(d)});
+  else days = (sc ? o.days.filter(d => d.logged) : o.days).filter(d => d.d <= TODAY);
+  const max = Math.max(1, ...days.map(d => Math.max(d.plan, d.dom + d.rev + d.brk))), pc = m => (100 * m / max * .76) + '%';
   const bar = d => {
-    const subs = Object.keys(d.bySub).map(id => `<i style="width:${pc(d.bySub[id])};background:${colorOf(id)}" title="${esc(S.subs[id] ? S.subs[id].nombre : id)}: ${fmt(d.bySub[id])}"></i>`).join('');
-    return `<div class="dr"><span>${dayLabel(d.d)}</span><div class="dbars">${sc ? '' : `<div class="db"><i class="pj" style="width:${pc(d.plan)}"></i><em>${fmt(d.plan)}</em></div>`}<div class="db">${subs}<i style="width:${pc(d.brk)};background:var(--track)"></i><em>${d.logged ? fmt(d.dom + d.rev) + ' + ' + fmt(d.brk) + ' de descanso' : ''}</em></div></div></div>`;
+    const fut = d.d > TODAY;
+    const subs = Object.keys(d.bySub).map(id => `<i style="width:${pc(d.bySub[id])};background:${colorOf(id)}" data-tip="sub" data-sid="${esc(id)}" data-d="${d.d}"></i>`).join('');
+    const real = d.logged ? fmt(d.dom + d.rev) + ' + ' + fmt(d.brk) + ' de descanso' : fut ? (d.plan ? '' : 'Libre') : d.plan ? 'Sin estudio' : 'Libre';
+    return `<div class="dr${fut ? ' fut' : ''}"><span>${dayLabel(d.d)}</span><div class="dbars">${sc ? '' : `<div class="db"><i class="pj" style="width:${pc(d.plan)}" data-tip="plan" data-d="${d.d}"></i><em>${d.plan ? fmt(d.plan) : ''}</em></div>`}${fut ? '' : `<div class="db">${subs}${d.brk ? `<i style="width:${pc(d.brk)};background:var(--track)" data-tip="brk" data-d="${d.d}"></i>` : ''}<em>${real}</em></div>`}</div></div>`;
   };
-  const sb = sc ? '' : Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]).map(id => `<tr><td>${S.subs[id] ? sw(id) + esc(S.subs[id].nombre) : esc(id)}</td><td class="r">${fmt(o.bySub[id])}</td><td class="r">${Math.round(100 * o.bySub[id] / o.study)} %</td></tr>`).join('');
+  dataDays = Object.fromEntries(days.map(x => [x.d, x]));
+  const sb = sc ? '' : Object.keys(o.bySub).sort((a, b) => o.bySub[b] - o.bySub[a]).map(id => `<tr><td>${S.subs[id] ? sw(id) + esc(S.subs[id].nombre) : esc(id)}</td><td class="r">${fmt(o.bySub[id])}</td><td class="r">${o.tasksBy[id] || 0}</td><td class="r">${Math.round(100 * o.bySub[id] / o.study)} %</td></tr>`).join('');
   const rows = o.rows.map(r => `<tr><td>${esc(r.name)}</td><td class="r">${r.n}</td><td class="r">${fmt(r.est)}</td><td class="r">${fmt(r.dom)}</td><td class="r">${fmt(r.rev)}</td><td class="r ${r.dom > r.est ? 'neg' : 'pos'}">${r.est ? (r.dom >= r.est ? '+' : '−') + Math.abs(Math.round(100 * (r.dom / r.est - 1))) + ' %' : '—'}</td></tr>`).join('');
   const dt = o.days.filter(d => d.logged).map(d => `<tr><td>${dayLabel(d.d)}</td>${sc ? '' : `<td class="r">${fmt(d.plan)}</td>`}<td class="r">${fmt(d.dom + d.rev)}</td><td class="r">${fmt(d.rev)}</td><td class="r">${fmt(d.brk)}</td><td class="r">${d.tasks}</td></tr>`).join('');
-  v.innerHTML = `<section><h2>Mis datos${sc ? ' de ' + esc(S.subs[sc].nombre) : ''}</h2><div class="tiles">${t}</div></section>
-   <section class="card"><h2>${sc ? 'Por día' : 'Previsto frente a real'}</h2><div class="legend"><span>${sc ? '' : 'Barra hueca: previsto. '}Barra de color: estudio por asignatura. Gris: descanso.</span></div><div class="dchart">${days.map(bar).join('')}</div></section>
-   ${sb ? `<section><h2>Por asignatura</h2><div class="tw"><table style="min-width:360px"><thead><tr><th>Asignatura</th><th class="r">Estudio</th><th class="r">Parte</th></tr></thead><tbody>${sb}</tbody></table></div></section>` : ''}
-   <section><h2>Tabla por día</h2><div class="tw"><table><thead><tr><th>Día</th>${sc ? '' : '<th class="r">Previsto</th>'}<th class="r">Estudio</th><th class="r">Revisión</th><th class="r">Descanso</th><th class="r">Tareas</th></tr></thead><tbody>${dt}</tbody></table></div></section>
+  const none = !o.study && !o.brk;
+  v.innerHTML = `<section><h2>Mis datos${sc ? ' de ' + esc(S.subs[sc].nombre) : ''}</h2>${nav}${none ? `<div class="empty">Sin estudio ${per}.</div>` : `<div class="tiles">${t}</div>`}</section>
+   <section class="card"><h2>${sc ? 'Por día' : 'Previsto frente a real'}</h2><div class="legend"><span>${sc ? '' : 'Barra hueca: previsto. '}Barra de color: estudio por asignatura. Gris: descanso. Pasa el cursor o toca una asignatura para ver el detalle.</span></div><div class="dchart">${days.map(bar).join('')}</div></section>
+   ${sb ? `<section><h2>Por asignatura</h2><div class="tw"><table style="min-width:360px"><thead><tr><th>Asignatura</th><th class="r">Estudio</th><th class="r">Tareas</th><th class="r">Parte</th></tr></thead><tbody>${sb}</tbody></table></div></section>` : ''}
+   ${dt && dPer !== 'dia' ? `<section><h2>Tabla por día</h2><div class="tw"><table><thead><tr><th>Día</th>${sc ? '' : '<th class="r">Previsto</th>'}<th class="r">Estudio</th><th class="r">Revisión</th><th class="r">Descanso</th><th class="r">Tareas</th></tr></thead><tbody>${dt}</tbody></table></div></section>` : ''}
    ${rows ? `<section><h2>Estimado frente a real</h2><p class="sub">Solo tareas acabadas con el temporizador. La desviación compara hacer con lo estimado.</p><div class="tw"><table><thead><tr><th>${sc ? 'Grupo' : 'Asignatura'}</th><th class="r">Tareas</th><th class="r">Estimado</th><th class="r">Hacer</th><th class="r">Revisión</th><th class="r">Desviación</th></tr></thead><tbody>${rows}</tbody></table></div></section>` : ''}`;
 }
+/* Detalle al pasar el cursor (o tocar) por un tramo de la gráfica de Mis datos. */
+let dataDays = {}, dtipT = null;
+function dataTip(el, x, y) {
+  const d = dataDays[el.dataset.d]; if (!d) return;
+  const k = el.dataset.tip; let h;
+  if (k === 'sub') {
+    const id = el.dataset.sid, n = d.tasksBy[id] || 0, sub = S.subs[id];
+    h = `<b>${sub ? sw(id) + esc(sub.nombre) : esc(id)}</b><span>${fmt(d.bySub[id] || 0)} de estudio</span><span>${n} ${n === 1 ? 'tarea hecha' : 'tareas hechas'}</span>`;
+  } else if (k === 'brk') h = `<b>Descanso</b><span>${fmt(d.brk)}</span>`;
+  else h = `<b>Previsto</b><span>${fmt(d.plan)} de estudio</span>`;
+  let t = $('dtip'); if (!t) {t = document.createElement('div'); t.id = 'dtip'; t.className = 'dtip'; t.setAttribute('role', 'tooltip'); document.body.appendChild(t)}
+  t.innerHTML = `<small>${dayLabel(d.d)}</small>` + h; t.hidden = false;
+  const r = t.getBoundingClientRect(), px = Math.min(Math.max(8, x - r.width / 2), innerWidth - r.width - 8), py = y - r.height - 14 < 8 ? y + 18 : y - r.height - 14;
+  t.style.left = px + 'px'; t.style.top = py + 'px';
+}
+function dataTipHide() {const t = $('dtip'); if (t) t.hidden = true}
+document.addEventListener('pointermove', e => {
+  if (e.pointerType === 'touch') return;
+  const el = e.target.closest && e.target.closest('.dchart [data-tip]');
+  if (el) dataTip(el, e.clientX, e.clientY); else dataTipHide();
+});
+document.addEventListener('pointerup', e => {
+  if (e.pointerType !== 'touch') return;
+  const el = e.target.closest && e.target.closest('.dchart [data-tip]');
+  clearTimeout(dtipT);
+  if (el) {dataTip(el, e.clientX, e.clientY); dtipT = setTimeout(dataTipHide, 3500)} else dataTipHide();
+});
 function wake() {try {if (S.app.run && S.app.run.phase !== 'break' && navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {})} catch (e) {}}
 
 /* ---------- Guardado ---------- */
@@ -802,6 +856,7 @@ function applySet(key, id, val, el) {
     case 'exMin': ex.min = n; render(); return;
     case 'exSub': ex.sid = val; render(); return;
     case 'chartN': chartN = n; uiPref.n = n; saveUi(); render(); return;
+    case 'dPer': dPer = val; dataTipHide(); render(); return;
     case 'doneOn': {const it = L.findItem(S, id, TODAY); if (it) markWithUndo([[it, val]]); doneAsk = null; pick = null; break}
     case 'moveTo': {L.pinTask(S, id, val); moveAsk = null; pick = null; setStatus('Tarea fijada el ' + dayLabel(val) + '.'); break}
     case 'doneOnSel': {const l = []; for (const k of sel) {const it = L.findItem(S, k, TODAY); if (it && !it.done) l.push([it, val])} markWithUndo(l); exitSel(); pick = null; break}
@@ -881,6 +936,7 @@ document.addEventListener('click', e => {
   if (d.spmore) {spMore = !spMore; render(); return}
   if (d.runbar) {if (uiPref.simple) {sp = 'sesion'; spMore = false} else view = 'sesion'; parar = false; scrollTo(0, 0); render(); return}
   if (d.undo) {undoDone(); return}
+  if (d.dnav !== undefined) {const k = +d.dnav, st = dPer === 'semana' ? 7 : 1; dRef = k ? L.addDays(dRef || TODAY, k * st) : null; if (dRef && dRef > TODAY) dRef = null; dataTipHide(); render(); return}
   if (d.fs) {fsOn ? fsExit() : fsEnter(); return}
   if (d.dvopen) {const it = L.findItem(S, d.key, TODAY); if (it) markWithUndo([[it, dayView && dayView <= TODAY ? dayView : TODAY, d.dvopen === 'fin']]); doneAsk = null; commit(); return}
   if (d.sdone) {

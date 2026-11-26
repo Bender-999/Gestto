@@ -562,14 +562,18 @@ function dayStats(S,d,now){
 }
 
 /* Datos */
-function stats(S,today,now,scope){
+/* Estadísticas. rng = {from, to} (AAAA-MM-DD, ambos incluidos) limita a ese periodo:
+   tramos del temporizador, días con su previsto y tareas acabadas en él. */
+function stats(S,today,now,scope,rng){
+  const inR=d=>!rng||(d>=rng.from&&d<=rng.to);
   const c={log:{},app:{run:S.app.run&&{...S.app.run}}};
   for(const k of Object.keys(S.log))c.log[k]=[...S.log[k]];
   if(c.app.run)closeSeg(c,now);
   let log=allSegs(c).sort((a,b)=>a.s-b.s);
   if(scope)log=log.filter(x=>x.a===scope);
-  const dmap={},day=d=>dmap[d]||(dmap[d]={d,plan:0,dom:0,rev:0,brk:0,tasks:0,logged:false,bySub:{}});
-  if(!scope)for(const x of S.app.days)day(x.d).plan=(+x.h||0)*60;
+  if(rng)log=log.filter(x=>inR(x.d));
+  const dmap={},day=d=>dmap[d]||(dmap[d]={d,plan:0,dom:0,rev:0,brk:0,tasks:0,logged:false,bySub:{},tasksBy:{}});
+  if(!scope)for(const x of S.app.days)if(inR(x.d))day(x.d).plan=(+x.h||0)*60;
   const stints=[],breaks=[];let cur=0,pd=null,paus=0;const m=x=>(x.e-x.s)/60000;
   for(const x of log){
     const o=day(x.d);o.logged=true;
@@ -582,7 +586,7 @@ function stats(S,today,now,scope){
   const items=buildItems(S,'0000-00-00').filter(i=>!scope||i.sid===scope);
   const sum=(l,f)=>l.reduce((a,x)=>a+f(x),0),rows={};let over=0,nt=0,estT=0,domT=0,extraMin=0,extraN=0;
   for(const it of items){
-    if(!it.done)continue;if(dmap[it.done]||it.done!=='x')day(it.done).tasks+=it.unit?1:1;
+    if(!it.done||!inR(it.done))continue;if(dmap[it.done]||it.done!=='x'){const o=day(it.done);o.tasks++;o.tasksBy[it.sid]=(o.tasksBy[it.sid]||0)+1}
     const l=log.filter(x=>x.k===it.key&&(x.t==='d'||x.t==='r'));if(!l.length)continue;
     const d=sum(l.filter(x=>x.t==='d'),m),r=sum(l.filter(x=>x.t==='r'),m);
     if(it.extra){extraMin+=d+r;extraN++;continue}
@@ -590,9 +594,10 @@ function stats(S,today,now,scope){
     o.n++;o.est+=it.m;o.dom+=d;o.rev+=r;nt++;estT+=it.m;domT+=d;if(d>it.m)over++;
   }
   const days=Object.values(dmap).sort((a,b)=>a.d<b.d?-1:1),counted=days.filter(o=>o.d<today||S.app.closed[o.d]||o.logged);
-  const dom=sum(days,o=>o.dom),rev=sum(days,o=>o.rev),brk=sum(days,o=>o.brk),bySub={};
+  const dom=sum(days,o=>o.dom),rev=sum(days,o=>o.rev),brk=sum(days,o=>o.brk),bySub={},tasksBy={};
   for(const x of log)if(x.t==='d'||x.t==='r')bySub[x.a]=(bySub[x.a]||0)+m(x);
-  return {days,dom,rev,brk,paus,extraMin,extraN,study:dom+rev,planned:sum(counted,o=>o.plan),stints,breaks,rows:Object.values(rows),over,nt,estT,domT,bySub,
+  for(const o of days)for(const k in o.tasksBy)tasksBy[k]=(tasksBy[k]||0)+o.tasksBy[k];
+  return {days,dom,rev,brk,paus,extraMin,extraN,study:dom+rev,planned:sum(counted,o=>o.plan),stints,breaks,rows:Object.values(rows),over,nt,estT,domT,bySub,tasksBy,tasks:sum(days,o=>o.tasks),
     meanStint:stints.length?sum(stints,x=>x)/stints.length:0,maxStint:stints.length?Math.max(...stints):0,meanBreak:breaks.length?sum(breaks,x=>x)/breaks.length:0};
 }
 function fmt(m){m=Math.round(Math.abs(m));const h=Math.floor(m/60),n=m%60;return h&&n?h+' h '+String(n).padStart(2,'0'):h?h+' h':n+' min'}
