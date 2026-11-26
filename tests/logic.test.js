@@ -213,3 +213,22 @@ test('tarea abierta: un rato cada día hasta acabarla', () => {
   assert.equal(back.asignatura.grupos[0].tareas[0].minutos_por_dia, 45);
   assert.ok(!L.parseText(JSON.stringify({formato: 'hoja-carga/1', asignatura: {nombre: 'X', grupos: [{nombre: 'G', tareas: [{nombre: 'Sin tiempo'}]}]}})).ok);
 });
+
+test('reparto: tareas enteras; los exámenes no se parten', () => {
+  const S = L.newState();
+  const exams = Array.from({length: 10}, (_, i) => ({id: 'ex' + i, nombre: 'Examen ' + i, minutos: 150}));
+  const r = L.parseText(JSON.stringify({formato: 'hoja-carga/1', asignatura: {nombre: 'Fluidos', fecha_limite: '2026-12-20', grupos: [
+    {id: 'ondas', nombre: 'Ondas', tipo: 'examen', tareas: exams},
+    {id: 'ej', nombre: 'Ejercicios', tipo: 'ejercicios', tareas: [{id: 'e1', nombre: 'Ej 1', minutos: 100}]}]}}));
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  r.subs.forEach(s => L.applySub(S, s));
+  const t = '2026-11-26';
+  S.app.days = Array.from({length: 10}, (_, i) => ({d: L.addDays(t, i), h: 3.75}));
+  const al = L.allocate(S, t);
+  const rows = Object.values(al.plan).flat().filter(x => x.it.gid === 'ondas');
+  assert.equal(rows.length, 10, 'un trozo por examen');
+  assert.ok(rows.every(x => x.m === 150 && !x.part), 'cada examen entero: ' + rows.map(x => x.m).join(','));
+  // El ejercicio de 100 min se parte si no cabe en lo que queda del día.
+  const ej = Object.values(al.plan).flat().filter(x => x.it.key.endsWith('/e1'));
+  assert.equal(ej.reduce((a, x) => a + x.m, 0), 100);
+});

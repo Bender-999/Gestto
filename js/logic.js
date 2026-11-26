@@ -244,7 +244,7 @@ function buildItems(S,today){
         }
         const tLim=minDate(t.limite,getLimitDate(s,t.limiteId||g.limiteId));
         const notBef=getNotBefore(s,t.limiteId||g.limiteId);
-        out.push({...base,key,ti,name:g.manual?t.nombre:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:tLim,notBefore:notBef,deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
+        out.push({...base,key,ti,whole:g.tipo==='examen',name:g.manual?t.nombre:g.nombre+' · '+t.nombre,det:t.det,m:+s.mins[key]||t.min,base:t.min,lvl:s.lvl[key]??t.prio??g.prio,limit:tLim,notBefore:notBef,deps:t.dep.map(x=>sid+'/'+x),rev:t.rev??s.revDef,done:s.done[key]||'',libre:!!t.extra&&!t.min,extra:!!t.extra,manual:!!t.manual});
       });
     });
   }
@@ -286,7 +286,12 @@ function allocate(S,today,opt){
   pend.sort((a,b)=>cmpItems(a.it,b.it));
   const open=days.filter(x=>!x.closed).map(x=>x.d),chunks=new Map();
   const depsOk=p=>p.it.deps.every(k=>{const q=byKey.get(k);return !q||q.left===0});
-  const elig=(p,d,r)=>p.left>0&&(!p.it.notBefore||p.it.notBefore<=d)&&(!p.it.limit||d<p.it.limit)&&depsOk(p)&&(p.it.unit?r>=p.left:r>=Math.min(MIN_CHUNK,p.left));
+  /* Las tareas van enteras. Si no caben en lo que queda del día, se parten (el resto va al
+     día siguiente), salvo los simulacros y los exámenes, que esperan a un día con hueco.
+     Un examen más largo que cualquier día se parte igualmente para que no se pierda. */
+  const maxCap=Math.max(0,...open.map(d=>rem[d]));
+  pend.forEach(p=>{p.it.whole=!!p.it.whole&&p.left<=maxCap});
+  const elig=(p,d,r)=>p.left>0&&(!p.it.notBefore||p.it.notBefore<=d)&&(!p.it.limit||d<p.it.limit)&&depsOk(p)&&(p.it.unit||p.it.whole?r>=p.left:r>=Math.min(MIN_CHUNK,p.left));
   const take=(p,d,n)=>{plan[d].push({it:p.it,m:n,total:p.total,part:0,parts:1});p.left-=n;rem[d]-=n;if(!chunks.has(p.it.key))chunks.set(p.it.key,[]);chunks.get(p.it.key).push(plan[d][plan[d].length-1])};
   const srOf={},warn={},sids=app.order.filter(id=>S.subs[id]&&S.subs[id].activa!==false);
   items.forEach(i=>{srOf[i.sid]=i.sr});
@@ -307,7 +312,7 @@ function allocate(S,today,opt){
   for(const p of pend){
     const d=pinOf(p.it.key);if(!d||!open.includes(d))continue;
     p.it.pinned=d;
-    const n=p.it.unit?p.left:Math.min(p.left,Math.max(0,rem[d]));
+    const n=p.it.unit||p.it.whole?p.left:Math.min(p.left,Math.max(0,rem[d]));
     if(n>0){take(p,d,n);rem[d]=Math.max(0,rem[d])}
     if(p.left>0){const nb=addDays(d,1);if(!p.it.notBefore||p.it.notBefore<nb)p.it.notBefore=nb}
   }
@@ -331,9 +336,6 @@ function allocate(S,today,opt){
       }
       return;
     }
-    const dailyBudget=new Map();
-    for(const p of pend){const lim=p.it.limit,dLeft=(lim?open.slice(oi).filter(o=>o<lim).length:(open.length-oi))||1;dailyBudget.set(p.it.key,Math.ceil(p.left/dLeft));}
-    const usedToday=new Map();
     let guard=500;
     while(rem[d]>=MIN_CHUNK&&guard--){
       let D='',slack=Infinity;
@@ -345,14 +347,11 @@ function allocate(S,today,opt){
         if(c-work<MIN_CHUNK){D=L;break}
       }
       let p=D?pend.filter(x=>x.it.limit&&x.it.limit<=D).sort((a,b)=>cmpItems(a.it,b.it)).find(x=>elig(x,d,rem[d])):null;
-      const urgent=!!p;
-      if(!p)p=pend.find(x=>elig(x,d,rem[d])&&(usedToday.get(x.it.key)||0)<(dailyBudget.get(x.it.key)||x.left));
+      if(!p)p=pend.find(x=>elig(x,d,rem[d]));
       if(!p)break;
-      const budget=dailyBudget.get(p.it.key)||p.left,used=usedToday.get(p.it.key)||0;
-      const n=Math.min(p.left,rem[d],urgent||p.it.unit?rem[d]:Math.max(MIN_CHUNK,budget-used));
+      const n=Math.min(p.left,rem[d]);
       if(n<=0)break;
       take(p,d,n);
-      usedToday.set(p.it.key,(usedToday.get(p.it.key)||0)+n);
     }
   });
   const dayList=days.map(x=>x.d);

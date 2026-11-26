@@ -12,6 +12,7 @@ Estas respuestas las dio el usuario. No se cambian sin preguntarle.
 | Mínimos diarios | Se cubren primero y el resto va según el modo. Si no caben en un día, solo se avisa y ese día no se aplican |
 | Bloques | Una asignatura por bloque al día, las más importantes antes, sin intercalar salvo cambio manual |
 | Fin de bloque | Si una tarea queda a medias y queda día, el bloque se alarga hasta acabarla |
+| Tareas enteras | Cada tarea va entera a un día. Solo se parte si no cabe en lo que queda del día, y el resto va al siguiente. Los exámenes (grupos de tipo examen) y los simulacros nunca se parten: esperan a un día con hueco, salvo que duren más que cualquier día. Antes el plan repartía cada tarea entre todos los días hasta su fecha (150 min en 10 días eran 15 min al día) y se quitó |
 | Horario | Se rellenan los días que se marcan, editables uno a uno. Se descuentan minutos de descanso por hora de estudio |
 | Botón de parada | Parar abre Pausa o Acabar día. La pausa no cuenta como estudio ni como descanso |
 | En espera | Una asignatura entra en el plan si tiene tareas o si su fecha está a menos de 30 días (editable). Con fecha cercana y sin tareas, avisa |
