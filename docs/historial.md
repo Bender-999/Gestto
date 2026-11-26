@@ -1,5 +1,9 @@
 # Historial
 
+## Versión 2.9.1 (26 de noviembre de 2026)
+
+- Corregido: en la versión simplificada, la pantalla del día sumaba lo estimado de las tareas (también las hechas) en lugar del estudio real. Hoy y los días pasados enseñan ahora el estudio real, como el resumen.
+
 ## Versión 2.9 (26 de noviembre de 2026)
 
 - Versión simplificada: el resumen del día lleva las gráficas de Mis datos (semana y día por horas) y las cifras debajo. Se quita la lista de tareas hechas.

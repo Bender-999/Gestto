@@ -355,8 +355,11 @@ function renderSimple(al) {
 }
 function renderSimpleDay(al) {
   const d = dayView, p = dayViewModal(al, true), isToday = d === TODAY, r = S.app.run;
-  const done = p.rows.filter(x => x.done), doneM = done.reduce((a, x) => a + x.m, 0);
-  const all = p.tot + doneM, pct = all ? Math.round(100 * doneM / all) : 0, dt = new Date(d + 'T00:00:00Z');
+  const done = p.rows.filter(x => x.done);
+  /* Hoy y los días pasados: estudio real (como el resumen). Días futuros o hoy sin empezar: lo previsto.
+     La barra es de tareas hechas sobre las del día. */
+  const planM = p.x ? Math.round((+p.x.h || 0) * 60) : 0, real = d <= TODAY ? L.dayStats(S, d, Date.now()).study : 0, showReal = d < TODAY || real > 0;
+  const pct = p.rows.length ? Math.round(100 * done.length / p.rows.length) : 0, dt = new Date(d + 'T00:00:00Z');
   const wd = dt.toLocaleDateString('es-ES', {timeZone: 'UTC', weekday: 'long'});
   let cta = '';
   if (r) cta = '';
@@ -371,7 +374,7 @@ function renderSimpleDay(al) {
       <div class="sp-date"><b>${isToday ? 'Hoy' : wd[0].toUpperCase() + wd.slice(1)}</b><span>${dayLabel(d, {weekday: isToday ? 'long' : undefined, month: 'long'})}</span></div>
       <button type="button" class="icon round" data-spgo="1" aria-label="Día siguiente">›</button></div>
     ${isToday ? '' : '<div class="sp-back"><button type="button" class="btn ghost sm" data-spgo="0">Volver a hoy</button></div>'}
-    ${p.x ? `<div class="sp-sum"><div><b>${fmt(all)}</b><span>de estudio${p.slots ? ' · ' + p.slots : ''}</span></div><div class="sp-prog" role="img" aria-label="${pct} % hecho"><i style="width:${pct}%"></i></div><small>${done.length} de ${p.rows.length} ${p.rows.length === 1 ? 'tarea hecha' : 'tareas hechas'}${p.free ? ' · libre ' + fmt(p.free) : ''}</small></div>` : ''}
+    ${p.x ? `<div class="sp-sum"><div><b>${fmt(showReal ? real : planM)}</b><span>${showReal ? 'de estudio' + (planM ? ' de ' + fmt(planM) + ' previstas' : '') : 'previstas'}${p.slots ? ' · ' + p.slots : ''}</span></div><div class="sp-prog" role="img" aria-label="${pct} % de las tareas hechas"><i style="width:${pct}%"></i></div><small>${done.length} de ${p.rows.length} ${p.rows.length === 1 ? 'tarea hecha' : 'tareas hechas'}${p.free ? ' · libre ' + fmt(p.free) : ''}</small></div>` : ''}
     ${cta}${list}${p.bar}</div>`;
   spAnim = '';
 }
