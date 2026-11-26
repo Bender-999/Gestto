@@ -3,7 +3,7 @@
 ## Versión 2.6 (26 de noviembre de 2026)
 
 - En la sesión ya no sale la fila de asignaturas.
-- Al tocar el cronómetro se ve solo el número a pantalla completa. Se sale tocando o con Esc.
+- Al tocar el cronómetro, el recuadro de la sesión pasa a pantalla completa con sus botones. Se sale tocándolo otra vez o con Esc.
 
 ## Versión 2.5 (26 de noviembre de 2026)
 
